@@ -269,13 +269,13 @@
 
     <!-- 문서 열람 팝업 모달 -->
     <div id="view-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 hidden">
-        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50 no-print">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
+            <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50 no-print">
                 <span class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
-                    <i data-lucide="file-check" class="w-4 h-4 text-emerald-600"></i> 전자서명 문석 상세 열람
+                    <i data-lucide="file-check" class="w-4 h-4 text-emerald-600"></i> 전자서명 확인서 상세 열람
                 </span>
                 <div class="flex items-center space-x-2">
-                    <button onclick="downloadModalPDF()" class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold flex items-center space-x-1">
+                    <button onclick="downloadModalPDF()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center space-x-1">
                         <i data-lucide="download" class="w-3.5 h-3.5"></i> <span>PDF 저장</span>
                     </button>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 p-1">
@@ -283,8 +283,10 @@
                     </button>
                 </div>
             </div>
-            <div id="modal-content" class="p-6 overflow-y-auto space-y-4">
-                <!-- 문서 데이터 삽입 영역 -->
+            <div id="modal-content-wrapper" class="p-4 sm:p-8 overflow-y-auto">
+                <div id="modal-content" class="bg-white p-6 rounded-xl border border-slate-200 space-y-6 text-xs sm:text-sm">
+                    <!-- 전체 양식 데이터 복구 출력 -->
+                </div>
             </div>
         </div>
     </div>
@@ -456,14 +458,18 @@
 
             const itemRows = [];
             document.querySelectorAll('#item-table-body tr').forEach((tr, i) => {
-                itemRows.push({
-                    no: i + 1,
-                    code: tr.querySelector('.item-code')?.value || '',
-                    name: tr.querySelector('.item-name')?.value || '',
-                    qty: tr.querySelector('.item-qty')?.value || '1',
-                    type: tr.querySelector('.item-type')?.value || '무상',
-                    note: tr.querySelector('.item-note')?.value || ''
-                });
+                const code = tr.querySelector('.item-code')?.value.trim() || '';
+                const name = tr.querySelector('.item-name')?.value.trim() || '';
+                if (code || name) {
+                    itemRows.push({
+                        no: i + 1,
+                        code: code,
+                        name: name,
+                        qty: tr.querySelector('.item-qty')?.value || '1',
+                        type: tr.querySelector('.item-type')?.value || '무상',
+                        note: tr.querySelector('.item-note')?.value || ''
+                    });
+                }
             });
 
             const docData = {
@@ -478,8 +484,8 @@
                 center_manager: document.getElementById('center_manager').value,
                 center_phone: document.getElementById('center_phone').value,
                 items: itemRows,
-                ownerSign: ownerCanvas.toDataURL(),
-                managerSign: managerCanvas.toDataURL()
+                ownerSign: ownerCanvas.toDataURL('image/png'),
+                managerSign: managerCanvas.toDataURL('image/png')
             };
 
             if (isFirebaseConnected && db) {
@@ -556,15 +562,17 @@
             }
 
             listContainer.innerHTML = docs.map(doc => {
-                const targetId = doc.id || doc.docId;
+                const targetId = doc.id || doc.docId || doc.createdAt;
+                const siteName = doc.site_name || (doc.site && doc.site.name) || '상호미상';
+                const managerName = doc.center_manager || (doc.center && doc.center.manager) || '김만식';
                 return `
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                         <div class="flex items-center space-x-2">
-                            <span class="font-bold text-sm text-slate-900">${doc.site_name || (doc.site && doc.site.name) || '상호미상'}</span>
+                            <span class="font-bold text-sm text-slate-900">${siteName}</span>
                             <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">${targetId}</span>
                         </div>
-                        <p class="text-xs text-slate-500 mt-1">담당자: ${doc.center_manager || (doc.center && doc.center.manager) || '김만식'} | 작성일: ${doc.timestamp ? new Date(doc.timestamp).toLocaleDateString() : '최근'}</p>
+                        <p class="text-xs text-slate-500 mt-1">담당자: ${managerName} | 작성일: ${doc.timestamp ? new Date(doc.timestamp).toLocaleDateString() : '최근'}</p>
                     </div>
                     <div class="flex items-center space-x-2">
                         <button onclick="viewDocDetail('${targetId}')" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold rounded-lg">열람</button>
@@ -580,50 +588,103 @@
                 return;
             }
 
-            const siteName = doc.site_name || (doc.site && doc.site.name) || '';
-            const siteAddress = doc.site_address || (doc.site && doc.site.address) || '';
-            const sitePhone = doc.site_phone || (doc.site && doc.site.tel) || '';
-            const siteOwner = doc.site_owner || (doc.site && doc.site.ceo) || '';
-            const centerName = doc.center_name || (doc.center && doc.center.name) || '';
-            const centerManager = doc.center_manager || (doc.center && doc.center.manager) || '';
-            const centerPhone = doc.center_phone || (doc.center && doc.center.tel) || '';
+            const siteName = doc.site_name || (doc.site && doc.site.name) || '-';
+            const siteAddress = doc.site_address || (doc.site && doc.site.address) || '-';
+            const sitePhone = doc.site_phone || (doc.site && doc.site.tel) || '-';
+            const siteOwner = doc.site_owner || (doc.site && doc.site.ceo) || '-';
+            const centerName = doc.center_name || (doc.center && doc.center.name) || '광주센터';
+            const centerManager = doc.center_manager || (doc.center && doc.center.manager) || '김만식';
+            const centerPhone = doc.center_phone || (doc.center && doc.center.tel) || '-';
             const ownerSign = doc.ownerSign || (doc.signatures && doc.signatures.client) || '';
             const managerSign = doc.managerSign || (doc.signatures && doc.signatures.company) || '';
+            const items = doc.items || [];
+
+            let itemsTableHtml = '';
+            if (items.length > 0) {
+                itemsTableHtml = items.map((item, idx) => `
+                    <tr class="border-b border-slate-200">
+                        <td class="p-2 text-center text-slate-500">${idx + 1}</td>
+                        <td class="p-2 font-mono">${item.code || '-'}</td>
+                        <td class="p-2 font-semibold text-slate-900">${item.name || '-'}</td>
+                        <td class="p-2 text-center">${item.qty || 1}</td>
+                        <td class="p-2 text-center"><span class="px-2 py-0.5 rounded text-xs ${item.type === '무상' ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-800'}">${item.type || '무상'}</span></td>
+                        <td class="p-2 text-slate-600">${item.note || '-'}</td>
+                    </tr>
+                `).join('');
+            } else {
+                itemsTableHtml = `<tr><td colspan="6" class="p-4 text-center text-slate-400">등록된 물품이 없습니다.</td></tr>`;
+            }
 
             const modalContent = document.getElementById('modal-content');
             modalContent.innerHTML = `
-                <div class="space-y-4 text-xs sm:text-sm">
-                    <div class="text-center border-b pb-3">
-                        <h3 class="text-xl font-bold text-slate-900">대 여 물 품 확 인 서</h3>
-                        <p class="text-xs text-slate-500 mt-1">문서번호: ${doc.id || doc.docId}</p>
+                <div class="space-y-6">
+                    <div class="text-center border-b border-slate-200 pb-4">
+                        <h2 class="text-2xl font-black text-slate-900 tracking-tight">대 여 물 품 확 인 서</h2>
+                        <p class="text-xs text-slate-500 mt-1">문서번호: <strong class="font-mono text-slate-700">${doc.id || doc.docId}</strong></p>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border">
-                        <div>
-                            <p class="font-bold text-slate-800 border-b pb-1 mb-1">1. SITE 정보</p>
-                            <p>상호: ${siteName}</p>
-                            <p>주소: ${siteAddress}</p>
-                            <p>전화: ${sitePhone}</p>
-                            <p>대표자: ${siteOwner}</p>
+                    <!-- 1 & 2. 정보 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
+                            <h4 class="font-bold text-slate-900 text-xs border-b border-slate-200 pb-1 mb-2">1. SITE 정보 (대여처)</h4>
+                            <p><span class="text-slate-500">상호:</span> <strong>${siteName}</strong></p>
+                            <p><span class="text-slate-500">주소:</span> ${siteAddress}</p>
+                            <p><span class="text-slate-500">전화:</span> ${sitePhone}</p>
+                            <p><span class="text-slate-500">대표자:</span> <strong>${siteOwner}</strong></p>
                         </div>
-                        <div>
-                            <p class="font-bold text-slate-800 border-b pb-1 mb-1">2. 관리센터 정보</p>
-                            <p>센터명: ${centerName}</p>
-                            <p>담당자: ${centerManager}</p>
-                            <p>전화: ${centerPhone}</p>
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
+                            <h4 class="font-bold text-slate-900 text-xs border-b border-slate-200 pb-1 mb-2">2. 관리센터 정보 (대여 관리)</h4>
+                            <p><span class="text-slate-500">센터명:</span> <strong>${centerName}</strong></p>
+                            <p><span class="text-slate-500">담당자:</span> <strong>${centerManager}</strong></p>
+                            <p><span class="text-slate-500">전화:</span> ${centerPhone}</p>
                         </div>
                     </div>
 
-                    <div class="border rounded-lg p-3 space-y-2 bg-slate-50">
-                        <p class="font-bold text-slate-800 border-b pb-1">3. 전자 서명 확인</p>
-                        <div class="grid grid-cols-2 gap-3 pt-1">
-                            <div class="text-center bg-white p-2 rounded border">
-                                <p class="text-xs text-slate-500 mb-1">대표자 서명 (${siteOwner})</p>
-                                ${ownerSign ? `<img src="${ownerSign}" class="h-16 mx-auto object-contain">` : '<p class="text-slate-400 py-4">서명 없음</p>'}
+                    <!-- 3. 대여 물품 목록 -->
+                    <div class="space-y-2">
+                        <h4 class="font-bold text-slate-900 text-xs">3. 대여 물품 목록</h4>
+                        <div class="overflow-x-auto rounded-lg border border-slate-200">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-slate-100 text-slate-700 border-b border-slate-200 font-semibold">
+                                    <tr>
+                                        <th class="p-2 text-center w-10">NO</th>
+                                        <th class="p-2 w-28">품번</th>
+                                        <th class="p-2">품명</th>
+                                        <th class="p-2 text-center w-16">수량</th>
+                                        <th class="p-2 text-center w-20">구분</th>
+                                        <th class="p-2">비고</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200 bg-white">
+                                    ${itemsTableHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 4. 약관 및 준수사항 -->
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5 text-xs text-slate-600 leading-relaxed">
+                        <h4 class="font-bold text-slate-900 border-b border-slate-200 pb-1 mb-1">4. 약관 및 준수사항</h4>
+                        <p>1. <strong>대표자</strong>는 상기 SITE 내에 설치된 GS시스템의 A/S를 ㈜지앤서비스(이하 "회사")에 요청하였고, A/S 진행에 필요한 기간 동안 회사로부터 상기 부품을 대여 받았음을 확인합니다.</p>
+                        <p>2. 대표자는 A/S가 완료되거나, 부품 대여 후 A/S 요청을 철회할 경우 회사가 상기 SITE 출입 및 GS시스템에서 부품을 회수할 수 있도록 적극 협조하여야 합니다.</p>
+                        <p>3. 대표자는 상기 부품을 선량한 관리자의 주의 의무로써 관리하여야 하며 손/망실 또는 회수 지연 시 손해를 배상하여야 합니다.</p>
+                    </div>
+
+                    <!-- 5. 전자 서명 -->
+                    <div class="border-t border-slate-200 pt-4 space-y-3">
+                        <h4 class="font-bold text-slate-900 text-xs">5. 전자 서명 확인</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="border border-slate-200 rounded-xl p-3 text-center bg-white space-y-2">
+                                <span class="text-xs font-semibold text-slate-600 block border-b pb-1">대표자 서명 (${siteOwner})</span>
+                                <div class="h-24 flex items-center justify-center p-1 bg-slate-50 rounded">
+                                    ${ownerSign ? `<img src="${ownerSign}" class="max-h-full max-w-full object-contain" alt="대표자 서명">` : '<span class="text-slate-400">서명 없음</span>'}
+                                </div>
                             </div>
-                            <div class="text-center bg-white p-2 rounded border">
-                                <p class="text-xs text-slate-500 mb-1">담당자 서명 (${centerManager})</p>
-                                ${managerSign ? `<img src="${managerSign}" class="h-16 mx-auto object-contain">` : '<p class="text-slate-400 py-4">서명 없음</p>'}
+                            <div class="border border-slate-200 rounded-xl p-3 text-center bg-white space-y-2">
+                                <span class="text-xs font-semibold text-slate-600 block border-b pb-1">담당자 서명 (${centerManager})</span>
+                                <div class="h-24 flex items-center justify-center p-1 bg-slate-50 rounded">
+                                    ${managerSign ? `<img src="${managerSign}" class="max-h-full max-w-full object-contain" alt="담당자 서명">` : '<span class="text-slate-400">서명 없음</span>'}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -642,7 +703,7 @@
             if (typeof html2pdf !== 'undefined') {
                 const opt = {
                     margin: 0.3,
-                    filename: `확인서_상세.pdf`,
+                    filename: `대여물품확인서_상세.pdf`,
                     image: { type: 'jpeg', quality: 0.98 },
                     html2canvas: { scale: 2 },
                     jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
