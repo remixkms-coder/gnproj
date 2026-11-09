@@ -27,7 +27,7 @@
 </head>
 <body class="text-slate-800 antialiased min-h-screen flex flex-col">
 
-    <!-- Firebase 설정 영역 (키 적용 완료) -->
+    <!-- Firebase 설정 영역 (gnprojet) -->
     <script>
         const firebaseConfig = {
             apiKey: "AIzaSyD077sx-JRPPPmI5QOOV1MBAPtdYUfQPq0",
@@ -48,11 +48,11 @@
                 isFirebaseConnected = true;
             }
         } catch (e) {
-            console.warn("Firebase 준비 중: 로컬 브라우저 저장 모드로 안전 작동합니다.", e);
+            console.warn("Firebase 연결 준비 중: 로컬 모드로 작동합니다.", e);
         }
     </script>
 
-    <!-- 상단 반응형 헤더 -->
+    <!-- 상단 헤더 -->
     <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-30 no-print">
         <div class="max-w-6xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
             <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
@@ -267,8 +267,31 @@
         </section>
     </main>
 
+    <!-- 문서 열람 팝업 모달 -->
+    <div id="view-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50 no-print">
+                <span class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+                    <i data-lucide="file-check" class="w-4 h-4 text-emerald-600"></i> 전자서명 문석 상세 열람
+                </span>
+                <div class="flex items-center space-x-2">
+                    <button onclick="downloadModalPDF()" class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold flex items-center space-x-1">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i> <span>PDF 저장</span>
+                    </button>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 p-1">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="modal-content" class="p-6 overflow-y-auto space-y-4">
+                <!-- 문서 데이터 삽입 영역 -->
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentDocId = '';
+        let loadedDocsCache = [];
         let ownerCanvas, ownerCtx, managerCanvas, managerCtx;
         let isDrawingOwner = false, isDrawingManager = false;
 
@@ -431,8 +454,21 @@
                 return;
             }
 
+            const itemRows = [];
+            document.querySelectorAll('#item-table-body tr').forEach((tr, i) => {
+                itemRows.push({
+                    no: i + 1,
+                    code: tr.querySelector('.item-code')?.value || '',
+                    name: tr.querySelector('.item-name')?.value || '',
+                    qty: tr.querySelector('.item-qty')?.value || '1',
+                    type: tr.querySelector('.item-type')?.value || '무상',
+                    note: tr.querySelector('.item-note')?.value || ''
+                });
+            });
+
             const docData = {
                 id: currentDocId,
+                docId: currentDocId,
                 timestamp: new Date().toISOString(),
                 site_name: siteName,
                 site_address: document.getElementById('site_address').value,
@@ -440,7 +476,10 @@
                 site_owner: document.getElementById('site_owner').value,
                 center_name: document.getElementById('center_name').value,
                 center_manager: document.getElementById('center_manager').value,
-                center_phone: document.getElementById('center_phone').value
+                center_phone: document.getElementById('center_phone').value,
+                items: itemRows,
+                ownerSign: ownerCanvas.toDataURL(),
+                managerSign: managerCanvas.toDataURL()
             };
 
             if (isFirebaseConnected && db) {
@@ -451,7 +490,7 @@
                     switchTab('archive');
                 }).catch((err) => {
                     console.error("Firebase 저장 에러:", err);
-                    alert("클라우드 저장 실패: 로컬에 저장합니다.");
+                    alert("클라우드 저장 권한 오류: 로컬에 저장합니다.");
                     saveToLocal(docData, downloadPdf);
                 });
             } else {
@@ -463,7 +502,7 @@
             let docs = JSON.parse(localStorage.getItem('rental_docs') || '[]');
             docs.unshift(docData);
             localStorage.setItem('rental_docs', JSON.stringify(docs));
-            alert('서명 문서가 성공적으로 저장되었습니다!');
+            alert('서명 문서가 저장되었습니다!');
             if (downloadPdf) downloadPDF();
             resetForm();
             switchTab('archive');
@@ -490,21 +529,24 @@
                 db.collection("rental_docs").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
                     let docs = [];
                     snapshot.forEach((doc) => docs.push(doc.data()));
+                    loadedDocsCache = docs;
                     renderArchiveList(docs);
                 }, (error) => {
                     console.warn("Snapshot error:", error);
                     let docs = JSON.parse(localStorage.getItem('rental_docs') || '[]');
+                    loadedDocsCache = docs;
                     renderArchiveList(docs);
                 });
             } else {
                 let docs = JSON.parse(localStorage.getItem('rental_docs') || '[]');
+                loadedDocsCache = docs;
                 renderArchiveList(docs);
             }
         }
 
         function renderArchiveList(docsData = null) {
             const listContainer = document.getElementById('archive-list');
-            let docs = docsData || JSON.parse(localStorage.getItem('rental_docs') || '[]');
+            let docs = docsData || loadedDocsCache || JSON.parse(localStorage.getItem('rental_docs') || '[]');
             const badge = document.getElementById('archive-count-badge');
             if (badge) badge.innerText = docs.length;
 
@@ -513,20 +555,102 @@
                 return;
             }
 
-            listContainer.innerHTML = docs.map(doc => `
+            listContainer.innerHTML = docs.map(doc => {
+                const targetId = doc.id || doc.docId;
+                return `
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                         <div class="flex items-center space-x-2">
-                            <span class="font-bold text-sm text-slate-900">${doc.site_name}</span>
-                            <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">${doc.id}</span>
+                            <span class="font-bold text-sm text-slate-900">${doc.site_name || (doc.site && doc.site.name) || '상호미상'}</span>
+                            <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">${targetId}</span>
                         </div>
-                        <p class="text-xs text-slate-500 mt-1">담당자: ${doc.center_manager || '김만식'} | 작성일: ${new Date(doc.timestamp).toLocaleDateString()}</p>
+                        <p class="text-xs text-slate-500 mt-1">담당자: ${doc.center_manager || (doc.center && doc.center.manager) || '김만식'} | 작성일: ${doc.timestamp ? new Date(doc.timestamp).toLocaleDateString() : '최근'}</p>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button onclick="alert('문서 ID: ${doc.id}')" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold rounded-lg">열람</button>
+                        <button onclick="viewDocDetail('${targetId}')" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold rounded-lg">열람</button>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
+        }
+
+        function viewDocDetail(docId) {
+            const doc = loadedDocsCache.find(d => (d.id === docId || d.docId === docId));
+            if (!doc) {
+                alert('해당 문서를 불러올 수 없습니다.');
+                return;
+            }
+
+            const siteName = doc.site_name || (doc.site && doc.site.name) || '';
+            const siteAddress = doc.site_address || (doc.site && doc.site.address) || '';
+            const sitePhone = doc.site_phone || (doc.site && doc.site.tel) || '';
+            const siteOwner = doc.site_owner || (doc.site && doc.site.ceo) || '';
+            const centerName = doc.center_name || (doc.center && doc.center.name) || '';
+            const centerManager = doc.center_manager || (doc.center && doc.center.manager) || '';
+            const centerPhone = doc.center_phone || (doc.center && doc.center.tel) || '';
+            const ownerSign = doc.ownerSign || (doc.signatures && doc.signatures.client) || '';
+            const managerSign = doc.managerSign || (doc.signatures && doc.signatures.company) || '';
+
+            const modalContent = document.getElementById('modal-content');
+            modalContent.innerHTML = `
+                <div class="space-y-4 text-xs sm:text-sm">
+                    <div class="text-center border-b pb-3">
+                        <h3 class="text-xl font-bold text-slate-900">대 여 물 품 확 인 서</h3>
+                        <p class="text-xs text-slate-500 mt-1">문서번호: ${doc.id || doc.docId}</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border">
+                        <div>
+                            <p class="font-bold text-slate-800 border-b pb-1 mb-1">1. SITE 정보</p>
+                            <p>상호: ${siteName}</p>
+                            <p>주소: ${siteAddress}</p>
+                            <p>전화: ${sitePhone}</p>
+                            <p>대표자: ${siteOwner}</p>
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-800 border-b pb-1 mb-1">2. 관리센터 정보</p>
+                            <p>센터명: ${centerName}</p>
+                            <p>담당자: ${centerManager}</p>
+                            <p>전화: ${centerPhone}</p>
+                        </div>
+                    </div>
+
+                    <div class="border rounded-lg p-3 space-y-2 bg-slate-50">
+                        <p class="font-bold text-slate-800 border-b pb-1">3. 전자 서명 확인</p>
+                        <div class="grid grid-cols-2 gap-3 pt-1">
+                            <div class="text-center bg-white p-2 rounded border">
+                                <p class="text-xs text-slate-500 mb-1">대표자 서명 (${siteOwner})</p>
+                                ${ownerSign ? `<img src="${ownerSign}" class="h-16 mx-auto object-contain">` : '<p class="text-slate-400 py-4">서명 없음</p>'}
+                            </div>
+                            <div class="text-center bg-white p-2 rounded border">
+                                <p class="text-xs text-slate-500 mb-1">담당자 서명 (${centerManager})</p>
+                                ${managerSign ? `<img src="${managerSign}" class="h-16 mx-auto object-contain">` : '<p class="text-slate-400 py-4">서명 없음</p>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('view-modal').classList.remove('hidden');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeModal() {
+            document.getElementById('view-modal').classList.add('hidden');
+        }
+
+        function downloadModalPDF() {
+            const element = document.getElementById('modal-content');
+            if (typeof html2pdf !== 'undefined') {
+                const opt = {
+                    margin: 0.3,
+                    filename: `확인서_상세.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+                };
+                html2pdf().set(opt).from(element).save();
+            } else {
+                window.print();
+            }
         }
     </script>
 </body>
