@@ -1,1284 +1,452 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>대여 물품 확인서 전자 서명 시스템</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Font Awesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Google Fonts (Noto Sans KR) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <!-- html2pdf.js Library for PDF Generation -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대여 물품 확인서 전자계약 시스템</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- html2pdf.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Firebase SDK (v9) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; }
+        .canvas-container { position: relative; width: 100%; height: 160px; }
+        canvas { border: 1px dashed #cbd5e1; border-radius: 0.5rem; background-color: #fff; touch-action: none; cursor: crosshair; }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background-color: #fff; }
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
 
-  <!-- Firebase Web SDK (v11.6.1) -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    // Global Environment Config & Initializers
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'gn-rental-app';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-  apiKey: "AIzaSyD077sx-JRPPPmI5QOOV1MBAPtdYUfQPq0",
+    <!-- Firebase 설정 영역 (본인의 Firebase 키 정보로 변경해 주세요) -->
+    <script>
+        const firebaseConfig = {
+   apiKey: "AIzaSyD077sx-JRPPPmI5QOOV1MBAPtdYUfQPq0",
   authDomain: "gnprojet.firebaseapp.com",
   projectId: "gnprojet",
   storageBucket: "gnprojet.firebasestorage.app",
   messagingSenderId: "940892635124",
   appId: "1:940892635124:web:6cfe9e322b307410f843a1",
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-
-    window.cloudDB = db;
-    window.cloudAppId = appId;
-    window.cloudAuth = auth;
-
-    // Authenticate & Connect Realtime Listener
-    async function initCloudSync() {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-
-        const publicDocsRef = collection(db, 'artifacts', appId, 'public', 'data', 'rental_documents');
-
-        // Realtime Subscription across 11 devices
-        onSnapshot(publicDocsRef, (snapshot) => {
-          const docs = [];
-          snapshot.forEach((docSnap) => {
-            docs.push(docSnap.data());
-          });
-          // Sort newest first
-          docs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-          window.documentsList = docs;
-          
-          // Fallback cache
-          try {
-            localStorage.setItem('gn_rental_documents_v1', JSON.stringify(docs));
-          } catch(e) {}
-
-          window.updateBadge && window.updateBadge();
-          window.renderArchiveList && window.renderArchiveList();
-        }, (error) => {
-          console.error("Cloud Sync Error:", error);
-          window.showToast && window.showToast('클라우드 동기화 연결 상태를 확인해주세요 (오프라인 모드 유지)', 'warning');
-        });
-      } catch (err) {
-        console.error("Auth Init Error:", err);
-      }
-    }
-
-    window.saveDocToCloud = async function(docObject) {
-      if (!auth.currentUser) return false;
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'rental_documents', docObject.docId);
-      await setDoc(docRef, docObject);
-      return true;
-    };
-
-    window.deleteDocFromCloud = async function(docId) {
-      if (!auth.currentUser) return false;
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'rental_documents', docId);
-      await deleteDoc(docRef);
-      return true;
-    };
-
-    initCloudSync();
-  </script>
-
-  <style>
-<!-- ... existing code -->
-        <!-- Navigation Tabs -->
-        <nav class="flex space-x-1 sm:space-x-2">
-          <button id="nav-new-btn" onclick="switchTab('new')" class="px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 bg-blue-600 text-white flex items-center gap-2 shadow-sm">
-            <i class="fa-solid fa-pen-to-square"></i>
-            <span>새 문서 작성</span>
-          </button>
-          <button id="nav-archive-btn" onclick="switchTab('archive')" class="px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2">
-            <i class="fa-solid fa-cloud text-emerald-400"></i>
-            <span>실시간 클라우드 보관함</span>
-            <span id="doc-count-badge" class="ml-1 bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">0</span>
-          </button>
-        </nav>
-<!-- ... existing code -->
-      <!-- Archive Controls & Header -->
-      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div>
-          <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <i class="fa-solid fa-cloud text-blue-600"></i> 11인 통합 클라우드 보관함
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-              <span class="w-2 h-2 mr-1 bg-emerald-500 rounded-full animate-ping"></span> 실시간 동기화중
-            </span>
-          </h2>
-          <p class="text-xs text-slate-500 mt-1">모든 담당자가 작성한 서명 확인서가 즉시 동기화되어 실시간 공유됩니다.</p>
-        </div>
-
-        <!-- Search & Filter Input -->
-        <div class="flex items-center gap-2 w-full md:w-auto">
-          <div class="relative w-full md:w-64">
-            <input type="text" id="archive-search" oninput="renderArchiveList()" placeholder="상호명, 문서번호 검색..." class="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-          </div>
-          <button onclick="exportAllDataJSON()" title="전체 데이터 백업 (JSON)" class="px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1 border border-slate-300">
-            <i class="fa-solid fa-download"></i> 백업
-          </button>
-        </div>
-      </div>
-<!-- ... existing code -->
-    /* ==========================================
-       SAVE DOCUMENT TO CLOUD & LOCALSTORAGE
-       ========================================== */
-    async function saveDocument(autoDownloadPdf = false) {
-      // 1. Validation Checks
-      const siteName = document.getElementById('site_name').value.trim();
-      const siteAddress = document.getElementById('site_address').value.trim();
-      const siteTel = document.getElementById('site_tel').value.trim();
-      const siteCeo = document.getElementById('site_ceo').value.trim();
-
-      const centerName = document.getElementById('center_name').value.trim();
-      const centerManager = document.getElementById('center_manager').value.trim();
-      const centerTel = document.getElementById('center_tel').value.trim();
-
-      const termsAgreed = document.getElementById('terms-agree').checked;
-      const docDate = document.getElementById('doc-date').value;
-
-      if (!siteName || !siteAddress || !siteTel || !siteCeo) {
-        showToast('SITE(대여처) 정보를 모두 입력해 주세요.', 'error');
-        return;
-      }
-      if (!centerName || !centerManager || !centerTel) {
-        showToast('관리센터 정보를 모두 입력해 주세요.', 'error');
-        return;
-      }
-      if (!termsAgreed) {
-        showToast('약관 및 준수사항에 동의해 주세요.', 'error');
-        return;
-      }
-      if (!clientPad.hasStrokes) {
-        showToast('SITE 대표자 전자 서명이 누락되었습니다.', 'error');
-        return;
-      }
-      if (!companyPad.hasStrokes) {
-        showToast('㈜지앤서비스 담당자 전자 서명이 누락되었습니다.', 'error');
-        return;
-      }
-
-      // 2. Gather Item Rows Data
-      const itemRows = [];
-      document.querySelectorAll('.item-row').forEach((tr, i) => {
-        itemRows.push({
-          no: i + 1,
-          code: tr.querySelector('.item-code').value.trim(),
-          name: tr.querySelector('.item-name').value.trim(),
-          qty: tr.querySelector('.item-qty').value.trim(),
-          type: tr.querySelector('.item-type').value,
-          note: tr.querySelector('.item-note').value.trim()
-        });
-      });
-
-      // 3. Export Signature Canvas to Base64 Image
-      const clientSignImage = clientPad.canvas.toDataURL('image/png');
-      const companySignImage = companyPad.canvas.toDataURL('image/png');
-
-      // 4. Construct Electronic Document Object
-      const newDocument = {
-        docId: currentDocId,
-        createdAt: new Date().toISOString(),
-        docDate: docDate,
-        site: { name: siteName, address: siteAddress, tel: siteTel, ceo: siteCeo },
-        center: { name: centerName, manager: centerManager, tel: centerTel },
-        items: itemRows,
-        signatures: {
-          client: clientSignImage,
-          company: companySignImage
-        },
-        termsAgreed: true
-      };
-
-      showToast('클라우드에 서명 문서를 저장하고 동기화하는 중...', 'info');
-
-      // 5. Store to Cloud DB (Firestore)
-      if (window.saveDocToCloud) {
-        try {
-          await window.saveDocToCloud(newDocument);
-          showToast('11인 공유 클라우드에 성공적으로 등록되었습니다!', 'success');
-        } catch(e) {
-          console.error(e);
-          // Fallback to local
-          documentsList.unshift(newDocument);
-          saveToStorage();
-        }
-      } else {
-        documentsList.unshift(newDocument);
-        saveToStorage();
-      }
-
-      // 6. Handle Auto PDF Download or Reset
-      if (autoDownloadPdf) {
-        viewDocument(currentDocId);
-        setTimeout(() => {
-          downloadModalDocPDF();
-          resetForm();
-          switchTab('archive');
-        }, 300);
-      } else {
-        resetForm();
-        switchTab('archive');
-      }
-    }
-<!-- ... existing code -->
-    async function deleteDocument(docId) {
-      if (confirm(`정말로 문서 [${docId}]를 11인 클라우드 보관함에서 삭제하시겠습니까?`)) {
-        if (window.deleteDocFromCloud) {
-          try {
-            await window.deleteDocFromCloud(docId);
-            showToast('클라우드에서 문서를 삭제하였습니다.', 'info');
-          } catch(e) {
-            documentsList = documentsList.filter(d => d.docId !== docId);
-            saveToStorage();
-          }
-        } else {
-          documentsList = documentsList.filter(d => d.docId !== docId);
-          saveToStorage();
-          showToast('문서가 삭제되었습니다.', 'info');
-        }
-      }
-    }
-
-    /* Custom Scrollbar for archive */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #f1f1f1;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
-    }
-  </style>
-</head>
-<body class="text-slate-800 antialiased min-h-screen flex flex-col justify-between">
-
-  <!-- TOP HEADER & NAVBAR -->
-  <header class="bg-slate-900 text-white shadow-md sticky top-0 z-40 no-print">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16">
-        <!-- Logo & Title -->
-        <div class="flex items-center gap-3">
-          <div class="bg-blue-600 text-white p-2 rounded-lg font-bold flex items-center justify-center w-10 h-10 shadow-lg">
-            <i class="fa-solid me-0.5 fa-file-signature text-xl"></i>
-          </div>
-          <div>
-            <h1 class="text-lg font-bold tracking-tight">㈜지앤서비스 전자계약 시스템</h1>
-            <p class="text-xs text-slate-400">대여 물품 확인서 전자 서명 및 보관 플랫폼</p>
-          </div>
-        </div>
-
-        <!-- Navigation Tabs -->
-        <nav class="flex space-x-1 sm:space-x-2">
-          <button id="nav-new-btn" onclick="switchTab('new')" class="px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 bg-blue-600 text-white flex items-center gap-2 shadow-sm">
-            <i class="fa-solid fa-pen-to-square"></i>
-            <span>새 문서 작성</span>
-          </button>
-          <button id="nav-archive-btn" onclick="switchTab('archive')" class="px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2">
-            <i class="fa-solid fa-box-archive"></i>
-            <span>문서 보관함</span>
-            <span id="doc-count-badge" class="ml-1 bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">0</span>
-          </button>
-        </nav>
-      </div>
-    </div>
-  </header>
-
-  <!-- MAIN CONTAINER -->
-  <main class="max-w-5xl mx-auto px-3 sm:px-6 py-6 flex-grow w-full">
-
-    <!-- Toast Notification Container -->
-    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
-
-    <!-- ========================================== -->
-    <!-- TAB 1: NEW DOCUMENT FORM (새 문서 작성) -->
-    <!-- ========================================== -->
-    <section id="tab-new" class="space-y-6">
-      
-      <!-- Top Action Controls -->
-      <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200 no-print">
-        <div class="flex items-center gap-2">
-          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-            <span class="w-2 h-2 mr-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-            작성 중 (Draft)
-          </span>
-          <span class="text-xs text-slate-500">문서번호: <strong id="form-doc-id" class="font-mono text-slate-700">DOC-20261107-XXXX</strong></span>
-        </div>
-        <div class="flex items-center gap-2">
-          <button type="button" onclick="resetForm()" class="px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1.5">
-            <i class="fa-solid fa-rotate-right"></i> 양식 초기화
-          </button>
-          <button type="button" onclick="sampleDataFill()" class="px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1.5">
-            <i class="fa-solid fa-wand-magic-sparkles"></i> 샘플 데이터 채우기
-          </button>
-        </div>
-      </div>
-
-      <!-- OFFICIAL FORM CONTAINER CARD -->
-      <div id="printable-form" class="bg-white rounded-2xl shadow-md border border-slate-200 p-6 sm:p-10 document-card space-y-8 relative">
-        
-        <!-- Document Title & Header -->
-        <div class="text-center border-b-2 border-slate-900 pb-6">
-          <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight underline underline-offset-8">대 여 물 품 확 인 서</h2>
-          <p class="mt-2 text-xs sm:text-sm text-slate-500">본 확인서는 ㈜지앤서비스와 대여 업체 간의 물품 대여 사실을 증명하는 전자문서입니다.</p>
-        </div>
-
-        <!-- FORM CONTENT -->
-        <form id="rental-form" onsubmit="event.preventDefault();" class="space-y-8">
-          
-          <!-- SECTION 1 & SECTION 2: GRID FOR SITE & CONTROL CENTER INFO -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            <!-- SECTION 1: SITE 정보 (대여 고객/업체) -->
-            <div class="bg-slate-50 p-4 sm:p-5 rounded-xl border border-slate-200 space-y-4">
-              <div class="flex items-center gap-2 border-b border-slate-300 pb-2">
-                <i class="fa-solid fa-building text-blue-600"></i>
-                <h3 class="font-bold text-slate-900 text-sm sm:text-base">1. SITE 정보 (대여처)</h3>
-              </div>
-              <div class="grid grid-cols-1 gap-3 text-sm">
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">상호 (업체명) <span class="text-red-500">*</span></label>
-                  <input type="text" id="site_name" required placeholder="예: (주)한국건설 광주현장" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">현장 주소 <span class="text-red-500">*</span></label>
-                  <input type="text" id="site_address" required placeholder="예: 광주광역시 서구 상무평화로 10" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">전화번호 <span class="text-red-500">*</span></label>
-                    <input type="tel" id="site_tel" required placeholder="062-123-4567" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">대표자명 <span class="text-red-500">*</span></label>
-                    <input type="text" id="site_ceo" required placeholder="홍길동" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- SECTION 2: 관리센터 정보 (공급/대여 주체) -->
-            <div class="bg-slate-50 p-4 sm:p-5 rounded-xl border border-slate-200 space-y-4">
-              <div class="flex items-center gap-2 border-b border-slate-300 pb-2">
-                <i class="fa-solid fa-city text-blue-600"></i>
-                <h3 class="font-bold text-slate-900 text-sm sm:text-base">2. 관리센터 정보 (대여 관리)</h3>
-              </div>
-              <div class="grid grid-cols-1 gap-3 text-sm">
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">관리센터명 <span class="text-red-500">*</span></label>
-                  <input type="text" id="center_name" required value="" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">담당자명 <span class="text-red-500">*</span></label>
-                  <input type="text" id="center_manager" required value="" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">연락처 <span class="text-red-500">*</span></label>
-                  <input type="tel" id="center_tel" required value="" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <!-- SECTION 3: 대여 물품 목록 테이블 -->
-          <div class="space-y-3">
-            <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-              <div class="flex items-center gap-2">
-                <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
-                <h3 class="font-bold text-slate-900 text-sm sm:text-base">3. 대여 물품 목록</h3>
-              </div>
-              <button type="button" onclick="addTableRow()" class="no-print px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm flex items-center gap-1">
-                <i class="fa-solid fa-plus"></i> 행 추가
-              </button>
-            </div>
-
-            <div class="overflow-x-auto rounded-lg border border-slate-200">
-              <table class="w-full text-xs sm:text-sm text-left text-slate-700">
-                <thead class="text-xs text-slate-700 uppercase bg-slate-100 border-b border-slate-200">
-                  <tr>
-                    <th scope="col" class="px-3 py-2.5 text-center w-12">NO</th>
-                    <th scope="col" class="px-3 py-2.5 w-28">품번</th>
-                    <th scope="col" class="px-3 py-2.5 min-w-[140px]">품명</th>
-                    <th scope="col" class="px-3 py-2.5 text-center w-20">수량</th>
-                    <th scope="col" class="px-3 py-2.5 text-center w-28">유/무상 구분</th>
-                    <th scope="col" class="px-3 py-2.5">비고</th>
-                    <th scope="col" class="px-2 py-2.5 text-center w-12 no-print">삭제</th>
-                  </tr>
-                </thead>
-                <tbody id="item-table-body" class="divide-y divide-slate-200">
-                  <!-- Dynamic rows generated by JS -->
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- SECTION 4: 약관 및 준수사항 -->
-          <div class="bg-amber-50/60 border border-amber-200/80 rounded-xl p-4 sm:p-5 space-y-3 text-xs sm:text-sm text-slate-700">
-            <div class="flex items-center gap-2 border-b border-amber-200 pb-2 text-amber-900 font-bold">
-              <i class="fa-solid fa-file-contract text-amber-700"></i>
-              <h3>4. 약관 및 준수사항</h3>
-            </div>
-            <ol class="list-decimal list-inside space-y-2 text-slate-700 leading-relaxed font-normal">
-              <li class="pl-1">
-                <strong class="font-semibold text-slate-900">대표자 A/S 요청 및 부품 대여 확인:</strong> 본 물품은 SITE 대표자의 정식 요청에 따라 A/S 서비스 지원 및 시스템 운용을 위해 임시 대여되는 부품/장비임을 확인합니다.
-              </li>
-              <li class="pl-1">
-                <strong class="font-semibold text-slate-900">회수 협조 의무:</strong> 대여 기간 만료 또는 ㈜지앤서비스의 반납 요청 시, SITE는 지체 없이 해당 물품을 원상태로 반납하여야 하며 회수 절차에 적극 협조해야 합니다.
-              </li>
-              <li class="pl-1">
-                <strong class="font-semibold text-slate-900">주의 의무 및 손해배상:</strong> SITE는 대여 물품에 대하여 선량한 관리자의 주의 의무를 다해야 하며, 사용자 과실로 인한 파손, 분실, 고장 발생 시 이에 대한 보수 비용 또는 변상 책임(대품 가액 상당)을 부담합니다.
-              </li>
-            </ol>
-            <div class="pt-2 flex items-center gap-2 text-xs text-amber-800">
-              <input type="checkbox" id="terms-agree" required class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer">
-              <label for="terms-agree" class="cursor-pointer font-medium">위 약관 및 준수사항을 모두 읽었으며 동의합니다.</label>
-            </div>
-          </div>
-
-          <!-- SECTION 5: 전자 서명란 -->
-          <div class="space-y-4 pt-2">
-            <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-              <div class="flex items-center gap-2">
-                <i class="fa-solid fa-signature text-blue-600"></i>
-                <h3 class="font-bold text-slate-900 text-sm sm:text-base">5. 전자 서명란</h3>
-              </div>
-              <div class="flex items-center gap-2 text-xs text-slate-500">
-                <label for="doc-date" class="font-medium text-slate-700">작성일자:</label>
-                <input type="date" id="doc-date" required class="px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
-              </div>
-            </div>
-
-            <!-- Signature Pads Container -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              <!-- Representative (대표자) Signature -->
-              <div class="border border-slate-300 bg-white rounded-xl p-4 shadow-sm space-y-2">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-slate-700">SITE 대표자 서명 <span class="text-red-500">*</span></span>
-                  <button type="button" onclick="clearSignature('canvas-client')" class="no-print text-xs text-slate-500 hover:text-red-600 flex items-center gap-1">
-                    <i class="fa-solid fa-eraser"></i> 서명 지우기
-                  </button>
-                </div>
-                <div class="relative bg-slate-50 border border-dashed border-slate-300 rounded-lg overflow-hidden touch-none">
-                  <canvas id="canvas-client" width="400" height="180" class="w-full h-44 cursor-crosshair block"></canvas>
-                  <div id="canvas-client-placeholder" class="pointer-events-none absolute inset-0 flex items-center justify-center text-slate-400 text-xs font-light">
-                    여기에 서명해 주세요 (마우스/터치)
-                  </div>
-                </div>
-                <div class="text-right text-xs text-slate-500">
-                  서명자: <span id="client-sign-name-display" class="font-semibold text-slate-800">[대표자명 입력 필요]</span>
-                </div>
-              </div>
-
-              <!-- Company Representative (담당자) Signature -->
-              <div class="border border-slate-300 bg-white rounded-xl p-4 shadow-sm space-y-2">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-slate-700">㈜지앤서비스 담당자 서명 <span class="text-red-500">*</span></span>
-                  <button type="button" onclick="clearSignature('canvas-company')" class="no-print text-xs text-slate-500 hover:text-red-600 flex items-center gap-1">
-                    <i class="fa-solid fa-eraser"></i> 서명 지우기
-                  </button>
-                </div>
-                <div class="relative bg-slate-50 border border-dashed border-slate-300 rounded-lg overflow-hidden touch-none">
-                  <canvas id="canvas-company" width="400" height="180" class="w-full h-44 cursor-crosshair block"></canvas>
-                  <div id="canvas-company-placeholder" class="pointer-events-none absolute inset-0 flex items-center justify-center text-slate-400 text-xs font-light">
-                    여기에 서명해 주세요 (마우스/터치)
-                  </div>
-                </div>
-                <div class="text-right text-xs text-slate-500">
-                  서명자: <span id="company-sign-name-display" class="font-semibold text-slate-800">[담당자명 입력 필요]</span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- Submit Button Row -->
-          <div class="pt-6 border-t border-slate-200 text-center no-print flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button type="button" onclick="saveDocument(true)" class="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2 text-base">
-              <i class="fa-solid fa-file-pdf text-lg"></i>
-              <span>서명 완료 및 PDF 다운로드</span>
-            </button>
-            <button type="button" onclick="saveDocument(false)" class="w-full sm:w-auto px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2 text-base">
-              <i class="fa-solid fa-lock-check text-lg"></i>
-              <span>서명 완료 및 보관함 저장</span>
-            </button>
-          </div>
-
-        </form>
-
-      </div>
-    </section>
-
-    <!-- ========================================== -->
-    <!-- TAB 2: ARCHIVE VIEW (보관함 및 이력 관리) -->
-    <!-- ========================================== -->
-    <section id="tab-archive" class="hidden space-y-6">
-      
-      <!-- Archive Controls & Header -->
-      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div>
-          <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <i class="fa-solid fa-box-archive text-blue-600"></i> 전자문서 보관함
-          </h2>
-          <p class="text-xs text-slate-500 mt-1">저장된 대여 물품 확인서 이력을 조회, 열람, 위변조 검증 및 인쇄할 수 있습니다.</p>
-        </div>
-
-        <!-- Search & Filter Input -->
-        <div class="flex items-center gap-2 w-full md:w-auto">
-          <div class="relative w-full md:w-64">
-            <input type="text" id="archive-search" oninput="renderArchiveList()" placeholder="상호명, 문서번호 검색..." class="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-          </div>
-          <button onclick="exportAllDataJSON()" title="전체 데이터 백업 (JSON)" class="px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1 border border-slate-300">
-            <i class="fa-solid fa-download"></i> 백업
-          </button>
-        </div>
-      </div>
-
-      <!-- Archive Cards Grid / Table -->
-      <div id="archive-list-container" class="space-y-4">
-        <!-- Rendered dynamically via JavaScript -->
-      </div>
-
-    </section>
-
-  </main>
-
-  <!-- VIEW DOCUMENT MODAL (READ-ONLY PREVIEW) -->
-  <div id="doc-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 hidden">
-    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
-      
-      <!-- Modal Header -->
-      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 no-print">
-        <div class="flex items-center gap-2">
-          <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-            <i class="fa-solid fa-shield-check"></i> 검증완료 전자문서
-          </span>
-          <span id="modal-doc-id" class="font-mono text-xs text-slate-500"></span>
-        </div>
-        <div class="flex items-center gap-2">
-          <button onclick="downloadModalDocPDF()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 shadow-sm">
-            <i class="fa-solid fa-file-pdf"></i> PDF 저장
-          </button>
-          <button onclick="printModalDoc()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1">
-            <i class="fa-solid fa-print"></i> 문서 인쇄
-          </button>
-          <button onclick="closeDocModal()" class="text-slate-400 hover:text-slate-700 text-lg p-1 rounded-lg">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-      </div>
-
-      <!-- Modal Body (Printable Paper View) -->
-      <div id="modal-doc-content" class="p-6 sm:p-10 overflow-y-auto space-y-6 text-slate-800 text-sm">
-        <!-- Dynamic Document Injection -->
-      </div>
-
-    </div>
-  </div>
-
-  <!-- FOOTER -->
-  <footer class="bg-slate-100 border-t border-slate-200 py-4 text-center text-xs text-slate-500 no-print">
-    <p>© 2026 ㈜지앤서비스. All Rights Reserved. 본 전자서명 시스템은 무단 복제 및 변조를 금합니다.</p>
-  </footer>
-
-  <!-- APPLICATION JAVASCRIPT -->
-  <script>
-    /* ==========================================
-       GLOBAL STATE & INITIALIZATION
-       ========================================== */
-    const STORAGE_KEY = 'gn_rental_documents_v1';
-    let documentsList = [];
-    let currentDocId = '';
-
-    // Signature Canvas States
-    let clientPad = { canvas: null, ctx: null, drawing: false, hasStrokes: false };
-    let companyPad = { canvas: null, ctx: null, drawing: false, hasStrokes: false };
-
-    window.onload = function() {
-      // 1. Initialize Document ID & Date
-      initDocId();
-      document.getElementById('doc-date').value = new Date().toISOString().substring(0, 10);
-
-      // 2. Initialize Default Table Rows
-      initDefaultTableRows();
-
-      // 3. Setup Signature Canvases
-      initSignaturePads();
-
-      // 4. Load Archive Documents from LocalStorage
-      loadDocumentsFromStorage();
-
-      // 5. Dynamic Name Updates for Signature Labels
-      document.getElementById('site_ceo').addEventListener('input', (e) => {
-        document.getElementById('client-sign-name-display').textContent = e.target.value.trim() || '[대표자명 입력 필요]';
-      });
-      document.getElementById('center_manager').addEventListener('input', (e) => {
-        document.getElementById('company-sign-name-display').textContent = e.target.value.trim() || '[담당자명 입력 필요]';
-      });
-    };
-
-    /* ==========================================
-       DOCUMENT ID & INITIAL DATA GENERATOR
-       ========================================== */
-    function initDocId() {
-      const today = new Date();
-      const dateStr = today.getFullYear().toString() + 
-                      String(today.getMonth() + 1).padStart(2, '0') + 
-                      String(today.getDate()).padStart(2, '0');
-      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-      currentDocId = `DOC-${dateStr}-${randomSuffix}`;
-      document.getElementById('form-doc-id').textContent = currentDocId;
-    }
-
-    function initDefaultTableRows() {
-      const tbody = document.getElementById('item-table-body');
-      tbody.innerHTML = '';
-      
-      const initialItems = [
-        { code: 'GN-MOD-01', name: '스마트 제어 메인모듈', qty: 1, type: '무상', note: '대품 임시 설치용' },
-        { code: 'GN-SEN-04', name: '고도 센서 키트', qty: 2, type: '유상', note: '교체 수리 점검' }
-      ];
-
-      initialItems.forEach((item, idx) => {
-        createRowElement(idx + 1, item.code, item.name, item.qty, item.type, item.note);
-      });
-    }
-
-    function createRowElement(no, code = '', name = '', qty = 1, type = '무상', note = '') {
-      const tbody = document.getElementById('item-table-body');
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-slate-50/80 transition-colors item-row';
-      tr.innerHTML = `
-        <td class="px-3 py-2 text-center font-semibold text-slate-500 row-no">${no}</td>
-        <td class="px-3 py-2">
-          <input type="text" class="item-code w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none" placeholder="품번" value="${code}">
-        </td>
-        <td class="px-3 py-2">
-          <input type="text" class="item-name w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none font-medium" placeholder="품목명" value="${name}">
-        </td>
-        <td class="px-3 py-2 text-center">
-          <input type="number" min="1" class="item-qty w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs text-center focus:ring-1 focus:ring-blue-500 focus:outline-none" value="${qty}">
-        </td>
-        <td class="px-3 py-2 text-center">
-          <select class="item-type w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none">
-            <option value="무상" ${type === '무상' ? 'selected' : ''}>무상</option>
-            <option value="유상" ${type === '유상' ? 'selected' : ''}>유상</option>
-          </select>
-        </td>
-        <td class="px-3 py-2">
-          <input type="text" class="item-note w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none" placeholder="비고" value="${note}">
-        </td>
-        <td class="px-2 py-2 text-center no-print">
-          <button type="button" onclick="removeTableRow(this)" class="text-slate-400 hover:text-red-500 transition-colors p-1">
-            <i class="fa-regular fa-trash-can"></i>
-          </button>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    }
-
-    function addTableRow() {
-      const rowCount = document.querySelectorAll('.item-row').length;
-      createRowElement(rowCount + 1);
-      updateRowNumbers();
-    }
-
-    function removeTableRow(btn) {
-      const rows = document.querySelectorAll('.item-row');
-      if (rows.length <= 1) {
-        showToast('최소 1개 이상의 대여 물품 항목이 필요합니다.', 'warning');
-        return;
-      }
-      btn.closest('tr').remove();
-      updateRowNumbers();
-    }
-
-    function updateRowNumbers() {
-      const rows = document.querySelectorAll('.item-row');
-      rows.forEach((row, index) => {
-        row.querySelector('.row-no').textContent = index + 1;
-      });
-    }
-
-    /* ==========================================
-       HTML5 CANVAS SIGNATURE PAD SYSTEM
-       ========================================== */
-    function initSignaturePads() {
-      setupPad('canvas-client', clientPad, 'canvas-client-placeholder');
-      setupPad('canvas-company', companyPad, 'canvas-company-placeholder');
-    }
-
-    function setupPad(canvasId, padState, placeholderId) {
-      const canvas = document.getElementById(canvasId);
-      const placeholder = document.getElementById(placeholderId);
-      const ctx = canvas.getContext('2d');
-
-      // Set high resolution crisp canvas
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * 2;
-      canvas.height = rect.height * 2;
-      ctx.scale(2, 2);
-
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = '#0f172a'; // Deep slate blue color for signatures
-
-      padState.canvas = canvas;
-      padState.ctx = ctx;
-
-      // Mouse & Touch Event Handlers
-      const getPos = (e) => {
-        const r = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return {
-          x: clientX - r.left,
-          y: clientY - r.top
+  measurementId: "G-WT1LMTZZT5"
         };
-      };
-
-      const startDrawing = (e) => {
-        e.preventDefault();
-        padState.drawing = true;
-        const pos = getPos(e);
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
-      };
-
-      const draw = (e) => {
-        if (!padState.drawing) return;
-        e.preventDefault();
-        const pos = getPos(e);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-        padState.hasStrokes = true;
-        if (placeholder) placeholder.style.display = 'none';
-      };
-
-      const stopDrawing = (e) => {
-        if (padState.drawing) {
-          padState.drawing = false;
-          ctx.closePath();
-        }
-      };
-
-      // Register Events
-      canvas.addEventListener('mousedown', startDrawing);
-      canvas.addEventListener('mousemove', draw);
-      window.addEventListener('mouseup', stopDrawing);
-
-      canvas.addEventListener('touchstart', startDrawing, { passive: false });
-      canvas.addEventListener('touchmove', draw, { passive: false });
-      canvas.addEventListener('touchend', stopDrawing);
-    }
-
-    function clearSignature(canvasId) {
-      if (canvasId === 'canvas-client') {
-        clearPad(clientPad, 'canvas-client-placeholder');
-      } else {
-        clearPad(companyPad, 'canvas-company-placeholder');
-      }
-    }
-
-    function clearPad(padState, placeholderId) {
-      if (!padState.ctx) return;
-      padState.ctx.clearRect(0, 0, padState.canvas.width, padState.canvas.height);
-      padState.hasStrokes = false;
-      const placeholder = document.getElementById(placeholderId);
-      if (placeholder) placeholder.style.display = 'flex';
-    }
-
-    /* ==========================================
-       SAVE DOCUMENT TO LOCALSTORAGE
-       ========================================== */
-    function saveDocument(autoDownloadPdf = false) {
-      // 1. Validation Checks
-      const siteName = document.getElementById('site_name').value.trim();
-      const siteAddress = document.getElementById('site_address').value.trim();
-      const siteTel = document.getElementById('site_tel').value.trim();
-      const siteCeo = document.getElementById('site_ceo').value.trim();
-
-      const centerName = document.getElementById('center_name').value.trim();
-      const centerManager = document.getElementById('center_manager').value.trim();
-      const centerTel = document.getElementById('center_tel').value.trim();
-
-      const termsAgreed = document.getElementById('terms-agree').checked;
-      const docDate = document.getElementById('doc-date').value;
-
-      if (!siteName || !siteAddress || !siteTel || !siteCeo) {
-        showToast('SITE(대여처) 정보를 모두 입력해 주세요.', 'error');
-        return;
-      }
-      if (!centerName || !centerManager || !centerTel) {
-        showToast('관리센터 정보를 모두 입력해 주세요.', 'error');
-        return;
-      }
-      if (!termsAgreed) {
-        showToast('약관 및 준수사항에 동의해 주세요.', 'error');
-        return;
-      }
-      if (!clientPad.hasStrokes) {
-        showToast('SITE 대표자 전자 서명이 누락되었습니다.', 'error');
-        return;
-      }
-      if (!companyPad.hasStrokes) {
-        showToast('㈜지앤서비스 담당자 전자 서명이 누락되었습니다.', 'error');
-        return;
-      }
-
-      // 2. Gather Item Rows Data
-      const itemRows = [];
-      document.querySelectorAll('.item-row').forEach((tr, i) => {
-        itemRows.push({
-          no: i + 1,
-          code: tr.querySelector('.item-code').value.trim(),
-          name: tr.querySelector('.item-name').value.trim(),
-          qty: tr.querySelector('.item-qty').value.trim(),
-          type: tr.querySelector('.item-type').value,
-          note: tr.querySelector('.item-note').value.trim()
-        });
-      });
-
-      // 3. Export Signature Canvas to Base64 Image
-      const clientSignImage = clientPad.canvas.toDataURL('image/png');
-      const companySignImage = companyPad.canvas.toDataURL('image/png');
-
-      // 4. Construct Electronic Document Object
-      const newDocument = {
-        docId: currentDocId,
-        createdAt: new Date().toISOString(),
-        docDate: docDate,
-        site: { name: siteName, address: siteAddress, tel: siteTel, ceo: siteCeo },
-        center: { name: centerName, manager: centerManager, tel: centerTel },
-        items: itemRows,
-        signatures: {
-          client: clientSignImage,
-          company: companySignImage
-        },
-        termsAgreed: true
-      };
-
-      // 5. Store into LocalStorage
-      documentsList.unshift(newDocument);
-      saveToStorage();
-
-      showToast('전자문서가 안전하게 서명 및 보관함에 저장되었습니다.', 'success');
-
-      // 6. Handle Auto PDF Download or Reset
-      if (autoDownloadPdf) {
-        viewDocument(currentDocId);
-        setTimeout(() => {
-          downloadModalDocPDF();
-          resetForm();
-          switchTab('archive');
-        }, 300);
-      } else {
-        resetForm();
-        switchTab('archive');
-      }
-    }
-
-    /* ==========================================
-       PDF GENERATION & DOWNLOAD
-       ========================================== */
-    function downloadModalDocPDF() {
-      const element = document.querySelector('#modal-doc-content .document-card');
-      const docId = document.getElementById('modal-doc-id').textContent || 'DOC-CONFIRMATION';
-
-      if (!element) {
-        showToast('PDF로 변환할 문서를 찾을 수 없습니다.', 'error');
-        return;
-      }
-
-      showToast('PDF 문서를 생성하고 있습니다...', 'info');
-
-      const opt = {
-        margin:       [10, 10, 10, 10],
-        filename:     `${docId}_대여물품확인서.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-
-      html2pdf().set(opt).from(element).save().then(() => {
-        showToast('PDF 다운로드가 완료되었습니다.', 'success');
-      }).catch(err => {
-        console.error(err);
-        showToast('PDF 생성 중 오류가 발생했습니다.', 'error');
-      });
-    }
-
-    /* ==========================================
-       LOCALSTORAGE HELPERS
-       ========================================== */
-    function saveToStorage() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(documentsList));
-        updateBadge();
-        renderArchiveList();
-      } catch (e) {
-        showToast('저장용량이 초과되었거나 LocalStorage 저장이 불가능합니다.', 'error');
-      }
-    }
-
-    function loadDocumentsFromStorage() {
-      const data = localStorage.getItem(STORAGE_KEY);
-      if (data) {
+        
+        let db = null;
+        let isFirebaseConnected = false;
         try {
-          documentsList = JSON.parse(data);
+            if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                isFirebaseConnected = true;
+            }
         } catch (e) {
-          documentsList = [];
+            console.warn("Firebase 연동 준비 중: 로컬 모드로 작동합니다.", e);
         }
-      }
-      updateBadge();
-      renderArchiveList();
-    }
+    </script>
 
-    function updateBadge() {
-      document.getElementById('doc-count-badge').textContent = documentsList.length;
-    }
+    <!-- 상단 반응형 네비게이션 헤더 -->
+    <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-30 no-print">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-blue-600 p-2 rounded-lg">
+                        <i data-lucide="file-signature" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-base sm:text-lg leading-tight">(주)지앤서비스 전자계약 System</h1>
+                        <p class="text-xs text-slate-400">대여 물품 확인서 전자 서명 및 보관 플랫폼</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                <button id="nav-create-btn" onclick="switchTab('create')" class="flex-1 sm:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm transition">
+                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                    <span>새 문서 작성</span>
+                </button>
+                <button id="nav-archive-btn" onclick="switchTab('archive')" class="flex-1 sm:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm transition">
+                    <i data-lucide="archive" class="w-4 h-4"></i>
+                    <span>문서 보관함</span>
+                    <span id="archive-count-badge" class="ml-1 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
 
-    /* ==========================================
-       TAB SWITCHING LOGIC
-       ========================================== */
-    function switchTab(tab) {
-      const tabNew = document.getElementById('tab-new');
-      const tabArchive = document.getElementById('tab-archive');
-      const btnNew = document.getElementById('nav-new-btn');
-      const btnArchive = document.getElementById('nav-archive-btn');
+    <main class="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-6">
+        <!-- 1. 새 문서 작성 섹션 -->
+        <section id="section-create" class="space-y-6">
+            <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
+                <div class="flex items-center space-x-2">
+                    <span class="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></span>
+                    <span class="text-sm font-semibold text-slate-700">작성 중 (Draft)</span>
+                    <span id="doc-id-display" class="text-xs font-mono bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md">문서번호 생성중...</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="resetForm()" class="px-3 py-1.5 text-xs text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md flex items-center space-x-1">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                        <span>양식 초기화</span>
+                    </button>
+                    <button onclick="fillSampleData()" class="px-3 py-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md flex items-center space-x-1 font-medium">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                        <span>샘플 채우기</span>
+                    </button>
+                </div>
+            </div>
 
-      if (tab === 'new') {
-        tabNew.classList.remove('hidden');
-        tabArchive.classList.add('hidden');
+            <!-- 대여 물품 확인서 양식 본문 -->
+            <div id="pdf-render-area" class="bg-white p-4 sm:p-10 rounded-xl shadow-md border border-slate-200 space-y-6 sm:space-y-8">
+                <div class="text-center border-b border-slate-200 pb-6">
+                    <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">대 여 물 품 확 인 서</h2>
+                    <p class="text-xs sm:text-sm text-slate-500 mt-2">본 확인서는 ㈜지앤서비스와 대여 업체 간의 물품 대여 사실을 증명하는 전자문서입니다.</p>
+                </div>
 
-        btnNew.className = "px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 bg-blue-600 text-white flex items-center gap-2 shadow-sm";
-        btnArchive.className = "px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2";
-      } else {
-        tabNew.classList.add('hidden');
-        tabArchive.classList.remove('hidden');
+                <!-- 1. SITE 및 관리센터 정보 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div class="bg-slate-50/80 p-4 rounded-xl border border-slate-200 space-y-3">
+                        <h3 class="font-bold text-slate-900 text-sm sm:text-base flex items-center space-x-2 border-b border-slate-200 pb-2">
+                            <i data-lucide="building-2" class="w-4 h-4 text-blue-600"></i>
+                            <span>1. SITE 정보 (대여처)</span>
+                        </h3>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">상호 (업체명) *</label>
+                            <input type="text" id="site_name" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="예: 골프존파크 상무점">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">현장 주소 *</label>
+                            <input type="text" id="site_address" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="주소를 입력하세요">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">전화번호 *</label>
+                                <input type="text" id="site_phone" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="062-000-0000">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">대표자명 *</label>
+                                <input type="text" id="site_owner" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="대표자 성명">
+                            </div>
+                        </div>
+                    </div>
 
-        btnArchive.className = "px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 bg-blue-600 text-white flex items-center gap-2 shadow-sm";
-        btnNew.className = "px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2";
+                    <div class="bg-slate-50/80 p-4 rounded-xl border border-slate-200 space-y-3">
+                        <h3 class="font-bold text-slate-900 text-sm sm:text-base flex items-center space-x-2 border-b border-slate-200 pb-2">
+                            <i data-lucide="shield-check" class="w-4 h-4 text-blue-600"></i>
+                            <span>2. 관리센터 정보 (대여 관리)</span>
+                        </h3>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">관리센터명 *</label>
+                            <input type="text" id="center_name" value="광주센터" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">담당자 *</label>
+                                <input type="text" id="center_manager" value="김만식" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">전화번호 *</label>
+                                <input type="text" id="center_phone" value="010-0000-0000" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-        renderArchiveList();
-      }
-    }
+                <!-- 2. 대여 물품 목록 -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <h3 class="font-bold text-slate-900 text-sm sm:text-base flex items-center space-x-2">
+                            <i data-lucide="box" class="w-4 h-4 text-blue-600"></i>
+                            <span>3. 대여 물품 목록</span>
+                        </h3>
+                        <button type="button" onclick="addItemRow()" class="no-print px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold rounded-lg flex items-center space-x-1">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                            <span>품목 추가</span>
+                        </button>
+                    </div>
 
-    /* ==========================================
-       ARCHIVE LIST RENDERER
-       ========================================== */
-    function renderArchiveList() {
-      const container = document.getElementById('archive-list-container');
-      const searchKeyword = document.getElementById('archive-search').value.toLowerCase().trim();
+                    <div class="overflow-x-auto rounded-lg border border-slate-200">
+                        <table class="w-full text-xs sm:text-sm text-left">
+                            <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5 text-center w-10">NO</th>
+                                    <th class="p-2.5 w-28 sm:w-36">품번</th>
+                                    <th class="p-2.5 min-w-[120px]">품명</th>
+                                    <th class="p-2.5 w-16 text-center">수량</th>
+                                    <th class="p-2.5 w-24 text-center">구분</th>
+                                    <th class="p-2.5 min-w-[100px]">비고</th>
+                                    <th class="p-2.5 text-center w-10 no-print"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="item-table-body" class="divide-y divide-slate-200 bg-white">
+                                <!-- 항목 행 자동 생성 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
-      const filtered = documentsList.filter(doc => {
-        return doc.docId.toLowerCase().includes(searchKeyword) ||
-               doc.site.name.toLowerCase().includes(searchKeyword) ||
-               doc.site.ceo.toLowerCase().includes(searchKeyword) ||
-               doc.center.manager.toLowerCase().includes(searchKeyword);
-      });
+                <!-- 3. 대여 약관 -->
+                <div class="bg-slate-50 p-4 sm:p-5 rounded-xl border border-slate-200 space-y-2 text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    <p>1. <strong>대표자</strong>는 상기 SITE 내에 설치된 GS시스템의 A/S를 ㈜지앤서비스(이하 "회사")에 요청하였고, A/S 진행에 필요한 기간 동안 회사로부터 상기 부품을 대여 받았음을 확인합니다.</p>
+                    <p>2. 대표자는 A/S가 완료되거나, 부품 대여 후 A/S 요청을 철회할 경우 회사가 상기 SITE 출입 및 GS시스템에서 부품을 회수할 수 있도록 적극 협조하여야 합니다.</p>
+                    <p>3. 대표자는 상기 부품을 선량한 관리자의 주의 의무로써 관리하여야 합니다. 대표자는 부품을 손/망실하거나 제3자에게 양도할 수 없으며 회사의 회수 요청 시 지연되지 않도록 하여야 합니다.</p>
+                </div>
 
-      if (filtered.length === 0) {
-        container.innerHTML = `
-          <div class="bg-white rounded-2xl p-12 text-center border border-slate-200">
-            <i class="fa-solid fa-folder-open text-4xl text-slate-300 mb-3"></i>
-            <h3 class="text-base font-bold text-slate-700">보관된 전자문서가 없습니다</h3>
-            <p class="text-xs text-slate-400 mt-1">새 문서를 작성하고 전자 서명을 진행하여 문서함을 채워보세요.</p>
-          </div>
-        `;
-        return;
-      }
+                <!-- 4. 서명 영역 -->
+                <div class="pt-4 border-t border-slate-200 space-y-6">
+                    <div class="text-right text-xs sm:text-sm font-medium text-slate-600" id="current-date-display">
+                        작성일: 2026년 --월 --일
+                    </div>
 
-      container.innerHTML = filtered.map(doc => {
-        const dateFormatted = new Date(doc.createdAt).toLocaleString('ko-KR', {
-          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                        <!-- 대표자 서명 -->
+                        <div class="border border-slate-200 p-4 rounded-xl bg-slate-50/50 space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="font-bold text-xs sm:text-sm text-slate-800">스크린골프 대표자 서명 (인)</span>
+                                <button onclick="clearCanvas('owner')" class="no-print text-xs text-slate-400 hover:text-slate-600">지우기</button>
+                            </div>
+                            <div class="canvas-container">
+                                <canvas id="canvas-owner"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- 담당자 서명 -->
+                        <div class="border border-slate-200 p-4 rounded-xl bg-slate-50/50 space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="font-bold text-xs sm:text-sm text-slate-800">㈜지앤서비스 담당자 서명 (인)</span>
+                                <button onclick="clearCanvas('manager')" class="no-print text-xs text-slate-400 hover:text-slate-600">지우기</button>
+                            </div>
+                            <div class="canvas-container">
+                                <canvas id="canvas-manager"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 하단 액션 버튼 바 -->
+            <div class="bg-white p-4 rounded-xl shadow-md border border-slate-200 flex flex-col sm:flex-row items-center justify-end gap-3 no-print">
+                <button onclick="saveDocument(true)" class="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow-sm flex items-center justify-center space-x-2">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    <span>서명 완료 및 PDF 다운로드</span>
+                </button>
+                <button onclick="saveDocument(false)" class="w-full sm:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow-sm flex items-center justify-center space-x-2">
+                    <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                    <span>서명 완료 및 클라우드 저장</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- 2. 문서 보관함 섹션 -->
+        <section id="section-archive" class="space-y-4 hidden">
+            <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h2 class="text-lg font-bold text-slate-900">전자문서 보관함</h2>
+                            <span id="sync-status-badge" class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-600">로컬 저장소</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">11명 담당자가 실시간으로 공유 및 열람할 수 있는 보관함입니다.</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="search-input" oninput="renderArchiveList()" placeholder="상호명, 담당자 검색..." class="px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-48">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 보관함 리스트 -->
+            <div id="archive-list" class="space-y-3">
+                <!-- 카드 항목 자동 생성 -->
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // 초기화 코드 및 캔버스 스크립트
+        let currentDocId = '';
+        let ownerCanvas, ownerCtx, managerCanvas, managerCtx;
+        let isDrawingOwner = false, isDrawingManager = false;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initCanvases();
+            resetForm();
+            initSyncStatus();
+            loadDocuments();
         });
 
-        return `
-          <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div class="space-y-1.5 flex-grow">
-              <div class="flex items-center gap-2">
-                <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded-full font-mono">${doc.docId}</span>
-                <span class="text-xs text-slate-400"><i class="fa-regular fa-clock"></i> ${dateFormatted}</span>
-              </div>
-              <h3 class="text-base font-bold text-slate-900">${doc.site.name} <span class="text-xs font-normal text-slate-500">(대표자: ${doc.site.ceo})</span></h3>
-              <p class="text-xs text-slate-600 flex items-center gap-3 flex-wrap">
-                <span><i class="fa-solid fa-location-dot text-slate-400"></i> ${doc.site.address}</span>
-                <span>•</span>
-                <span><i class="fa-solid fa-box text-slate-400"></i> 물품 항목 ${doc.items.length}건</span>
-                <span>•</span>
-                <span><i class="fa-solid fa-user-gear text-slate-400"></i> 담당: ${doc.center.manager}</span>
-              </p>
-            </div>
-            <div class="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
-              <button onclick="viewDocument('${doc.docId}')" class="flex-1 md:flex-initial px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5">
-                <i class="fa-solid fa-eye"></i> 열람
-              </button>
-              <button onclick="directPDFDownload('${doc.docId}')" class="flex-1 md:flex-initial px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5" title="PDF 다운로드">
-                <i class="fa-solid fa-file-pdf"></i> PDF
-              </button>
-              <button onclick="deleteDocument('${doc.docId}')" class="px-3 py-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-xs font-semibold transition-colors" title="문서 삭제">
-                <i class="fa-regular fa-trash-can"></i>
-              </button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
+        function initSyncStatus() {
+            const badge = document.getElementById('sync-status-badge');
+            if (isFirebaseConnected) {
+                badge.className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700';
+                badge.innerText = '11인 통합 클라우드 보관함 (실시간 동기화중)';
+            }
+        }
 
-    function directPDFDownload(docId) {
-      viewDocument(docId);
-      setTimeout(() => {
-        downloadModalDocPDF();
-      }, 300);
-    }
+        function generateDocId() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const rand = Math.floor(1000 + Math.random() * 9000);
+            return `DOC-${yyyy}${mm}${dd}-${rand}`;
+        }
 
-    /* ==========================================
-       VIEW & PRINT DOCUMENT MODAL
-       ========================================== */
-    function viewDocument(docId) {
-      const doc = documentsList.find(d => d.docId === docId);
-      if (!doc) return;
+        function resetForm() {
+            currentDocId = generateDocId();
+            document.getElementById('doc-id-display').innerText = currentDocId;
+            document.getElementById('site_name').value = '';
+            document.getElementById('site_address').value = '';
+            document.getElementById('site_phone').value = '';
+            document.getElementById('site_owner').value = '';
+            
+            const today = new Date();
+            document.getElementById('current-date-display').innerText = `작성일: ${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`;
 
-      document.getElementById('modal-doc-id').textContent = doc.docId;
+            const tbody = document.getElementById('item-table-body');
+            tbody.innerHTML = '';
+            for(let i=0; i<3; i++) addItemRow();
 
-      const itemsHtml = doc.items.map(item => `
-        <tr class="border-b border-slate-200">
-          <td class="px-3 py-2 text-center text-xs font-medium text-slate-500">${item.no}</td>
-          <td class="px-3 py-2 text-xs font-mono">${item.code || '-'}</td>
-          <td class="px-3 py-2 text-xs font-semibold text-slate-900">${item.name || '-'}</td>
-          <td class="px-3 py-2 text-center text-xs font-medium">${item.qty}</td>
-          <td class="px-3 py-2 text-center text-xs"><span class="px-2 py-0.5 rounded text-xs ${item.type === '무상' ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-800'}">${item.type}</span></td>
-          <td class="px-3 py-2 text-xs text-slate-600">${item.note || '-'}</td>
-        </tr>
-      `).join('');
+            clearCanvas('owner');
+            clearCanvas('manager');
+        }
 
-      const modalBody = document.getElementById('modal-doc-content');
-      modalBody.innerHTML = `
-        <div class="document-card space-y-6">
-          <!-- Header -->
-          <div class="text-center border-b-2 border-slate-900 pb-4">
-            <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">대 여 물 품 확 인 서</h2>
-            <div class="mt-2 flex justify-between items-center text-xs text-slate-500 px-1">
-              <span>문서번호: <strong class="font-mono text-slate-800">${doc.docId}</strong></span>
-              <span>서명완료일: <strong class="text-slate-800">${doc.docDate}</strong></span>
-            </div>
-          </div>
+        function addItemRow() {
+            const tbody = document.getElementById('item-table-body');
+            const rowCount = tbody.children.length + 1;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="p-2 text-center font-medium text-slate-500">${rowCount}</td>
+                <td class="p-1.5"><input type="text" class="item-code w-full px-2 py-1 border border-slate-200 rounded text-xs" placeholder="부품코드"></td>
+                <td class="p-1.5"><input type="text" class="item-name w-full px-2 py-1 border border-slate-200 rounded text-xs" placeholder="품목명"></td>
+                <td class="p-1.5"><input type="number" class="item-qty w-full px-2 py-1 border border-slate-200 rounded text-xs text-center" value="1"></td>
+                <td class="p-1.5">
+                    <select class="item-type w-full px-1.5 py-1 border border-slate-200 rounded text-xs bg-white">
+                        <option value="무상">무상</option>
+                        <option value="유상">유상</option>
+                    </select>
+                </td>
+                <td class="p-1.5"><input type="text" class="item-note w-full px-2 py-1 border border-slate-200 rounded text-xs" placeholder="비고"></td>
+                <td class="p-1.5 text-center no-print">
+                    <button onclick="this.closest('tr').remove()" class="text-slate-400 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+            lucide.createIcons();
+        }
 
-          <!-- Section 1 & 2 -->
-          <div class="grid grid-cols-2 gap-4 text-xs">
-            <div class="border border-slate-200 rounded-lg p-3 bg-slate-50/50 space-y-1.5">
-              <h4 class="font-bold text-slate-900 border-b border-slate-200 pb-1 flex items-center justify-between">
-                <span>1. SITE 정보</span>
-                <span class="text-[10px] text-blue-600 font-normal">대여처</span>
-              </h4>
-              <p><span class="text-slate-500">상호:</span> <strong>${doc.site.name}</strong></p>
-              <p><span class="text-slate-500">주소:</span> ${doc.site.address}</p>
-              <p><span class="text-slate-500">전화:</span> ${doc.site.tel}</p>
-              <p><span class="text-slate-500">대표자:</span> <strong>${doc.site.ceo}</strong></p>
-            </div>
+        function fillSampleData() {
+            document.getElementById('site_name').value = '(주)골프존파크 상무점';
+            document.getElementById('site_address').value = '광주광역시 서구 상무평화로 10';
+            document.getElementById('site_phone').value = '062-123-4567';
+            document.getElementById('site_owner').value = '홍길동';
+        }
 
-            <div class="border border-slate-200 rounded-lg p-3 bg-slate-50/50 space-y-1.5">
-              <h4 class="font-bold text-slate-900 border-b border-slate-200 pb-1 flex items-center justify-between">
-                <span>2. 관리센터 정보</span>
-                <span class="text-[10px] text-blue-600 font-normal">관리처</span>
-              </h4>
-              <p><span class="text-slate-500">센터명:</span> <strong>${doc.center.name}</strong></p>
-              <p><span class="text-slate-500">담당자:</span> <strong>${doc.center.manager}</strong></p>
-              <p><span class="text-slate-500">연락처:</span> ${doc.center.tel}</p>
-            </div>
-          </div>
+        function initCanvases() {
+            ownerCanvas = document.getElementById('canvas-owner');
+            managerCanvas = document.getElementById('canvas-manager');
+            setupCanvas(ownerCanvas, 'owner');
+            setupCanvas(managerCanvas, 'manager');
+        }
 
-          <!-- Section 3: Table -->
-          <div class="space-y-2">
-            <h4 class="font-bold text-slate-900 text-xs">3. 대여 물품 목록</h4>
-            <table class="w-full text-left border-collapse border border-slate-200">
-              <thead>
-                <tr class="bg-slate-100 text-[11px] text-slate-700 border-b border-slate-200">
-                  <th class="px-3 py-2 text-center w-10">NO</th>
-                  <th class="px-3 py-2">품번</th>
-                  <th class="px-3 py-2">품명</th>
-                  <th class="px-3 py-2 text-center w-16">수량</th>
-                  <th class="px-3 py-2 text-center w-24">구분</th>
-                  <th class="px-3 py-2">비고</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${itemsHtml}
-              </tbody>
-            </table>
-          </div>
+        function setupCanvas(canvas, type) {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#0f172a';
 
-          <!-- Section 4: Terms -->
-          <div class="border border-slate-200 rounded-lg p-3 bg-slate-50 text-[11px] space-y-1.5 text-slate-600 leading-relaxed">
-            <h4 class="font-bold text-slate-900">4. 약관 및 준수사항</h4>
-            <p>1. <strong>대표자 A/S 요청 및 부품 대여 확인:</strong> 본 물품은 SITE 대표자의 정식 요청에 따라 A/S 서비스 지원 및 시스템 운용을 위해 임시 대여되는 부품/장비임을 확인합니다.</p>
-            <p>2. <strong>회수 협조 의무:</strong> 대여 기간 만료 또는 ㈜지앤서비스의 반납 요청 시, SITE는 지체 없이 해당 물품을 원상태로 반납하여야 합니다.</p>
-            <p>3. <strong>주의 의무 및 손해배상:</strong> SITE는 대여 물품에 대하여 선량한 관리자의 주의 의무를 다해야 하며 파손/분실 시 보수 비용 또는 변상 책임을 부담합니다.</p>
-          </div>
+            const startDraw = (e) => {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+                const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                if(type === 'owner') isDrawingOwner = true;
+                else isDrawingManager = true;
+            };
 
-          <!-- Section 5: Signatures -->
-          <div class="pt-2">
-            <h4 class="font-bold text-slate-900 text-xs mb-3">5. 전자 서명 정보</h4>
-            <div class="grid grid-cols-2 gap-4">
-              <!-- Client Signature Box -->
-              <div class="border border-slate-300 rounded-xl p-3 text-center space-y-2 bg-white">
-                <span class="text-xs font-bold text-slate-700 block border-b border-slate-200 pb-1">SITE 대표자 서명</span>
-                <div class="h-24 flex items-center justify-center p-1 bg-slate-50 rounded">
-                  <img src="${doc.signatures.client}" class="max-h-full max-w-full object-contain" alt="대표자 서명">
-                </div>
-                <p class="text-xs text-slate-600 font-semibold">서명자: ${doc.site.ceo} (인/서명)</p>
-              </div>
+            const draw = (e) => {
+                const isDrawing = type === 'owner' ? isDrawingOwner : isDrawingManager;
+                if (!isDrawing) return;
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+                const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            };
 
-              <!-- Company Signature Box -->
-              <div class="border border-slate-300 rounded-xl p-3 text-center space-y-2 bg-white">
-                <span class="text-xs font-bold text-slate-700 block border-b border-slate-200 pb-1">㈜지앤서비스 담당자 서명</span>
-                <div class="h-24 flex items-center justify-center p-1 bg-slate-50 rounded">
-                  <img src="${doc.signatures.company}" class="max-h-full max-w-full object-contain" alt="담당자 서명">
-                </div>
-                <p class="text-xs text-slate-600 font-semibold">서명자: ${doc.center.manager} (인/서명)</p>
-              </div>
-            </div>
-          </div>
+            const stopDraw = () => {
+                if(type === 'owner') isDrawingOwner = false;
+                else isDrawingManager = false;
+            };
 
-          <!-- Verification Badge Stamp -->
-          <div class="mt-6 pt-4 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-400">
-            <span>인증타임스탬프: ${new Date(doc.createdAt).toISOString()}</span>
-            <span class="text-emerald-700 font-semibold flex items-center gap-1">
-              <i class="fa-solid fa-certificate"></i> 위변조 방지 블록체인 시뮬레이션 Hash Verified
-            </span>
-          </div>
+            canvas.addEventListener('mousedown', startDraw);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDraw);
+            canvas.addEventListener('touchstart', startDraw);
+            canvas.addEventListener('touchmove', draw);
+            canvas.addEventListener('touchend', stopDraw);
+        }
 
-        </div>
-      `;
+        function clearCanvas(type) {
+            const canvas = type === 'owner' ? ownerCanvas : managerCanvas;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
 
-      document.getElementById('doc-modal').classList.remove('hidden');
-    }
+        function switchTab(tab) {
+            const createSec = document.getElementById('section-create');
+            const archiveSec = document.getElementById('section-archive');
+            const createBtn = document.getElementById('nav-create-btn');
+            const archiveBtn = document.getElementById('nav-archive-btn');
 
-    function closeDocModal() {
-      document.getElementById('doc-modal').classList.add('hidden');
-    }
+            if(tab === 'create') {
+                createSec.classList.remove('hidden');
+                archiveSec.classList.add('hidden');
+                createBtn.className = 'flex-1 sm:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-blue-600 text-white font-medium text-sm';
+                archiveBtn.className = 'flex-1 sm:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-slate-800 text-slate-300 font-medium text-sm';
+            } else {
+                createSec.classList.add('hidden');
+                archiveSec.classList.remove('hidden');
+                archiveBtn.className = 'flex-1 sm:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-blue-600 text-white font-medium text-sm';
+                createBtn.className = 'flex-1 sm:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-slate-800 text-slate-300 font-medium text-sm';
+                loadDocuments();
+            }
+        }
 
-    function printModalDoc() {
-      window.print();
-    }
+        function saveDocument(downloadPdf = false) {
+            const siteName = document.getElementById('site_name').value.trim();
+            if(!siteName) {
+                alert('상호(업체명)를 입력해주세요.');
+                return;
+            }
 
-    function deleteDocument(docId) {
-      if (confirm(`정말로 문서 [${docId}]를 보관함에서 삭제하시겠습니까?`)) {
-        documentsList = documentsList.filter(d => d.docId !== docId);
-        saveToStorage();
-        showToast('문서가 삭제되었습니다.', 'info');
-      }
-    }
+            const docData = {
+                id: currentDocId,
+                timestamp: new Date().toISOString(),
+                site_name: siteName,
+                site_address: document.getElementById('site_address').value,
+                site_phone: document.getElementById('site_phone').value,
+                site_owner: document.getElementById('site_owner').value,
+                center_name: document.getElementById('center_name').value,
+                center_manager: document.getElementById('center_manager').value,
+                center_phone: document.getElementById('center_phone').value
+            };
 
-    /* ==========================================
-       UTILITIES & SAMPLES
-       ========================================== */
-    function resetForm() {
-      initDocId();
-      document.getElementById('rental-form').reset();
-      document.getElementById('doc-date').value = new Date().toISOString().substring(0, 10);
-      initDefaultTableRows();
-      clearSignature('canvas-client');
-      clearSignature('canvas-company');
-      document.getElementById('client-sign-name-display').textContent = '[대표자명 입력 필요]';
-      document.getElementById('center_manager').value = '김철수 팀장';
-      document.getElementById('center-manager-display') ? null : null;
-      document.getElementById('company-sign-name-display').textContent = '김철수 팀장';
-    }
-
-    function sampleDataFill() {
-      document.getElementById('site_name').value = '(주)삼우건설 빛고을 현장';
-      document.getElementById('site_address').value = '광주광역시 북구 첨단연신로 100';
-      document.getElementById('site_tel').value = '062-555-1234';
-      document.getElementById('site_ceo').value = '박동진';
-      document.getElementById('client-sign-name-display').textContent = '박동진';
-
-      document.getElementById('center_name').value = '㈜지앤서비스 호남본부';
-      document.getElementById('center_manager').value = '이영희 차장';
-      document.getElementById('center_tel').value = '062-987-0011';
-      document.getElementById('company-sign-name-display').textContent = '이영희 차장';
-
-      document.getElementById('terms-agree').checked = true;
-
-      showToast('샘플 데이터가 입력되었습니다. 서명을 작성해주세요.', 'info');
-    }
-
-    function exportAllDataJSON() {
-      if (documentsList.length === 0) {
-        showToast('백업할 문서 데이터가 없습니다.', 'warning');
-        return;
-      }
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(documentsList, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `GNSERVICE_ELECTRONIC_DOCS_${new Date().toISOString().substring(0,10)}.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-      showToast('전체 문서 백업 파일이 다운로드 되었습니다.', 'success');
-    }
-
-    /* ==========================================
-       TOAST NOTIFICATION SYSTEM
-       ========================================== */
-    function showToast(message, type = 'info') {
-      const container = document.getElementById('toast-container');
-      const toast = document.createElement('div');
-      
-      let iconClass = 'fa-circle-info text-blue-500';
-      let borderClass = 'border-blue-500';
-      
-      if (type === 'success') {
-        iconClass = 'fa-circle-check text-emerald-500';
-        borderClass = 'border-emerald-500';
-      } else if (type === 'error') {
-        iconClass = 'fa-circle-exclamation text-red-500';
-        borderClass = 'border-red-500';
-      } else if (type === 'warning') {
-        iconClass = 'fa-triangle-exclamation text-amber-500';
-        borderClass = 'border-amber-500';
-      }
-
-      toast.className = `pointer-events-auto bg-slate-900 text-white text-xs sm:text-sm px-4 py-3 rounded-xl shadow-xl border-l-4 ${borderClass} flex items-center gap-3 transition-all transform translate-y-2 opacity-0 duration-200`;
-      toast.innerHTML = `
-        <i class="fa-solid ${iconClass} text-base"></i>
-        <span>${message}</span>
-      `;
-
-      container.appendChild(toast);
-
-      setTimeout(() => {
-        toast.classList.remove('translate-y-2', 'opacity-0');
-      }, 10);
-
-      setTimeout(() => {
-        toast.classList.add('opacity-0', 'translate-y-2');
-        setTimeout(() => toast.remove(), 200);
-      }, 3000);
-    }
-  </script>
-</body>
-</html>
+            if (isFirebaseConnected && db) {
+                db.collection("rental_docs").doc(currentDocId).set(docData).then(() => {
+                    alert('클라우드 DB에 안전하게 저장되었습니다!');
+                    if (downloadPdf) downloadPDF();
+                    resetForm();
+                    switch
