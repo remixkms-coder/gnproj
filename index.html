@@ -1,73 +1,3 @@
-```python
-# Verify OCR text from image_d5283b.png step-by-step
-text_line1 = '1. _________(이하 "대표자")은(는) 상기 SITE 내에 설치 된 GS시스템의 A/S를 ㈜지앤서비스(이하 "회사")에 요청하였고, A/S 진행에 필요한 기간 동안 회사로부터 상기 부품을 대여 받았음을 확인합니다.'
-text_line2 = '2. 대표자는 A/S가 완료되거나, 상기 부품을 대여한 후 A/S 요청을 철회하실 경우에는 회사가 상기 SITE의 풀입 및 GS시스템에서 상기 부품을 회수 할 수 있도록 적극 협조하여야 합니다.'
-text_line3 = '3. 대표자는 상기 부품을 선량한 관리자의 주의 의무로써 관리하여야 합니다. 대표자는 상기 부품을 손,망실하거나, 제3자에게양도 할 수 없으며, 회사의 요청 시 상기 부품읠 회수가 지연되지 않도록 하여야 합니다. 이를 위반한 대표자(종업원포함)는 회사의 손해를 배상하여야 합니다.'
-
-print("Line 1:", text_line1)
-print("Line 2:", text_line2)
-print("Line 3:", text_line3)
-
-
-```
-
-```text
-Line 1: 1. _________(이하 "대표자")은(는) 상기 SITE 내에 설치 된 GS시스템의 A/S를 ㈜지앤서비스(이하 "회사")에 요청하였고, A/S 진행에 필요한 기간 동안 회사로부터 상기 부품을 대여 받았음을 확인합니다.
-Line 2: 2. 대표자는 A/S가 완료되거나, 상기 부품을 대여한 후 A/S 요청을 철회하실 경우에는 회사가 상기 SITE의 풀입 및 GS시스템에서 상기 부품을 회수 할 수 있도록 적극 협조하여야 합니다.
-Line 3: 3. 대표자는 상기 부품을 선량한 관리자의 주의 의무로써 관리하여야 합니다. 대표자는 상기 부품을 손,망실하거나, 제3자에게양도 할 수 없으며, 회사의 요청 시 상기 부품읠 회수가 지연되지 않도록 하여야 합니다. 이를 위반한 대표자(종업원포함)는 회사의 손해를 배상하여야 합니다.
-
-
-```
-
-```python
-# Check replacing name logic for Line 1
-def get_terms(ceo_name=""):
-    name_display = ceo_name if ceo_name else "_______"
-    t1 = f'1. {name_display}(이하 "대표자")은(는) 상기 SITE 내에 설치 된 GS시스템의 A/S를 ㈜지앤서비스(이하 "회사")에 요청하였고, A/S 진행에 필요한 기간 동안 회사로부터 상기 부품을 대여 받았음을 확인합니다.'
-    t2 = '2. 대표자는 A/S가 완료되거나, 상기 부품을 대여한 후 A/S 요청을 철회하실 경우에는 회사가 상기 SITE의 풀입 및 GS시스템에서 상기 부품을 회수 할 수 있도록 적극 협조하여야 합니다.'
-    t3 = '3. 대표자는 상기 부품을 선량한 관리자의 주의 의무로써 관리하여야 합니다. 대표자는 상기 부품을 손,망실하거나, 제3자에게양도 할 수 없으며, 회사의 요청 시 상기 부품읠 회수가 지연되지 않도록 하여야 합니다. 이를 위반한 대표자(종업원포함)는 회사의 손해를 배상하여야 합니다.'
-    return t1, t2, t3
-
-print(get_terms("홍길동")[0])
-
-
-```
-
-```text
-1. 홍길동(이하 "대표자")은(는) 상기 SITE 내에 설치 된 GS시스템의 A/S를 ㈜지앤서비스(이하 "회사")에 요청하였고, A/S 진행에 필요한 기간 동안 회사로부터 상기 부품을 대여 받았음을 확인합니다.
-
-
-```
-
-올려주신 서식 이미지의 약관 문구를 토씨 하나 틀리지 않고 그대로 적용했습니다.
-
-### 💡 이번 수정 및 반영 사항
-
-1. **원본 약관 문구 그대로 적용**:
-* 이미지 속 1, 2, 3번 약관 문구(오탈자 및 띄어쓰기 포함)를 원본 그대로 반영했습니다.
-
-
-
-
-2. **대표자 성명 동적 자동 대입**:
-* 1번 약관의 `1. _______(이하 "대표자")` 밑줄 부분에 **SITE 정보에서 입력한 [대표자명]이 실시간으로 자동 대입**되도록 구현했습니다.
-
-
-
-
-3. **고객 약관 동의 체크박스 추가**:
-* 약관 상단 및 하단에 **"위 약관 및 준수사항을 모두 확인하였으며 이에 동의합니다"** 체크박스를 추가했습니다.
-* 서명 제출 시 동의 체크가 되어 있지 않으면 제출되지 않도록 필수 검증 로직을 포함했습니다.
-
-
-
----
-
-### 📄 수정된 index.html 전체 코드
-
-아래 코드 박스 우측 상단의 **[Copy code]** 버튼을 눌러 복사하신 후, GitHub의 `index.html` 파일에 **전체 덮어쓰기(Commit)** 해주시면 적용 완료됩니다.
-
-```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -86,8 +16,8 @@ print(get_terms("홍길동")[0])
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
         body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; }
-        .canvas-container { position: relative; width: 100%; height: 160px; }
-        canvas { border: 1px dashed #cbd5e1; border-radius: 0.5rem; background-color: #fff; touch-action: none; cursor: crosshair; }
+        .canvas-wrapper { position: relative; width: 100%; height: 160px; }
+        canvas { width: 100%; height: 100%; border: 1px dashed #cbd5e1; border-radius: 0.5rem; background-color: #fff; touch-action: none; cursor: crosshair; }
         @media print {
             .no-print { display: none !important; }
             .print-only { display: block !important; }
@@ -201,7 +131,7 @@ print(get_terms("홍길동")[0])
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-600 mb-1">대표자명 *</label>
-                                <input type="text" id="site_owner" oninput="updateTermsOwnerName(this.value)" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="대표자 성명">
+                                <input type="text" id="site_owner" onkeyup="updateTermsOwnerName(this.value)" onchange="updateTermsOwnerName(this.value)" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="대표자 성명">
                             </div>
                         </div>
                     </div>
@@ -242,11 +172,11 @@ print(get_terms("홍길동")[0])
                     </div>
 
                     <div id="item-cards-container" class="space-y-4">
-                        <!-- 세로 형태 물품 카드 자동 생성 -->
+                        <!-- 물품 카드 자동 동적 생성 -->
                     </div>
                 </div>
 
-                <!-- 4. 대여 약관 (원본 문구 100% 적용 & 대표자명 자동 반영) -->
+                <!-- 4. 대여 약관 및 준수사항 -->
                 <div class="bg-slate-50 p-4 sm:p-5 rounded-xl border border-slate-200 space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
                     <h3 class="font-bold text-slate-900 text-sm border-b border-slate-200 pb-2 flex items-center space-x-2">
                         <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i>
@@ -283,9 +213,9 @@ print(get_terms("홍길동")[0])
                         <div class="border border-slate-200 p-4 rounded-xl bg-slate-50/50 space-y-2">
                             <div class="flex justify-between items-center">
                                 <span class="font-bold text-xs sm:text-sm text-slate-800">스크린골프 대표자 서명 (인)</span>
-                                <button onclick="clearCanvas('owner')" class="no-print text-xs text-slate-400 hover:text-slate-600">지우기</button>
+                                <button type="button" onclick="clearCanvas('owner')" class="no-print text-xs text-slate-400 hover:text-slate-600">지우기</button>
                             </div>
-                            <div class="canvas-container">
+                            <div class="canvas-wrapper">
                                 <canvas id="canvas-owner"></canvas>
                             </div>
                         </div>
@@ -294,9 +224,9 @@ print(get_terms("홍길동")[0])
                         <div class="border border-slate-200 p-4 rounded-xl bg-slate-50/50 space-y-2">
                             <div class="flex justify-between items-center">
                                 <span class="font-bold text-xs sm:text-sm text-slate-800">㈜지앤서비스 담당자 서명 (인)</span>
-                                <button onclick="clearCanvas('manager')" class="no-print text-xs text-slate-400 hover:text-slate-600">지우기</button>
+                                <button type="button" onclick="clearCanvas('manager')" class="no-print text-xs text-slate-400 hover:text-slate-600">지우기</button>
                             </div>
-                            <div class="canvas-container">
+                            <div class="canvas-wrapper">
                                 <canvas id="canvas-manager"></canvas>
                             </div>
                         </div>
@@ -370,7 +300,7 @@ print(get_terms("홍길동")[0])
     <script>
         let currentDocId = '';
         let loadedDocsCache = [];
-        let ownerCanvas, ownerCtx, managerCanvas, managerCtx;
+        let ownerCanvas, managerCanvas;
         let isDrawingOwner = false, isDrawingManager = false;
 
         const PROJECTOR_MODELS = [
@@ -392,12 +322,17 @@ print(get_terms("홍길동")[0])
             resetForm();
             initSyncStatus();
             loadDocuments();
+            
+            window.addEventListener('resize', () => {
+                resizeCanvas(ownerCanvas);
+                resizeCanvas(managerCanvas);
+            });
         });
 
         function updateTermsOwnerName(val) {
             const display = document.getElementById('terms-owner-display');
             if (display) {
-                display.innerText = val.trim() ? val.trim() : '_______';
+                display.innerText = (val && val.trim()) ? val.trim() : '_______';
             }
         }
 
@@ -426,14 +361,17 @@ print(get_terms("홍길동")[0])
             document.getElementById('site_phone').value = '';
             document.getElementById('site_owner').value = '';
             updateTermsOwnerName('');
-            document.getElementById('terms_agree_check').checked = false;
+            
+            const check = document.getElementById('terms_agree_check');
+            if (check) check.checked = false;
             
             const today = new Date();
             document.getElementById('current-date-display').innerText = `작성일: ${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`;
 
             const container = document.getElementById('item-cards-container');
             container.innerHTML = '';
-            for(let i=0; i<2; i++) addItemCard();
+            addItemCard();
+            addItemCard();
 
             clearCanvas('owner');
             clearCanvas('manager');
@@ -528,47 +466,71 @@ print(get_terms("홍길동")[0])
             setupCanvas(managerCanvas, 'manager');
         }
 
+        function resizeCanvas(canvas) {
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(canvas, 0, 0);
+
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+                const ctx = canvas.getContext('2d');
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = '#0f172a';
+                ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+            }
+        }
+
         function setupCanvas(canvas, type) {
-            const container = canvas.parentElement;
-            canvas.width = container.clientWidth || 300;
-            canvas.height = container.clientHeight || 160;
+            setTimeout(() => resizeCanvas(canvas), 100);
             const ctx = canvas.getContext('2d');
-            ctx.lineWidth = 2.5;
-            ctx.lineCap = 'round';
-            ctx.strokeStyle = '#0f172a';
+
+            function getPos(e) {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return {
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
+                };
+            }
 
             const startDraw = (e) => {
                 e.preventDefault();
-                const rect = canvas.getBoundingClientRect();
-                const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-                const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                if(type === 'owner') isDrawingOwner = true;
+                if (type === 'owner') isDrawingOwner = true;
                 else isDrawingManager = true;
+
+                const pos = getPos(e);
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y);
             };
 
             const draw = (e) => {
                 const isDrawing = type === 'owner' ? isDrawingOwner : isDrawingManager;
                 if (!isDrawing) return;
                 e.preventDefault();
-                const rect = canvas.getBoundingClientRect();
-                const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-                const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-                ctx.lineTo(x, y);
+                const pos = getPos(e);
+                ctx.lineTo(pos.x, pos.y);
                 ctx.stroke();
             };
 
-            const stopDraw = () => {
-                if(type === 'owner') isDrawingOwner = false;
+            const stopDraw = (e) => {
+                if (type === 'owner') isDrawingOwner = false;
                 else isDrawingManager = false;
             };
 
             canvas.addEventListener('mousedown', startDraw);
             canvas.addEventListener('mousemove', draw);
             canvas.addEventListener('mouseup', stopDraw);
-            canvas.addEventListener('touchstart', startDraw);
-            canvas.addEventListener('touchmove', draw);
+            canvas.addEventListener('mouseleave', stopDraw);
+
+            canvas.addEventListener('touchstart', startDraw, { passive: false });
+            canvas.addEventListener('touchmove', draw, { passive: false });
             canvas.addEventListener('touchend', stopDraw);
         }
 
@@ -589,6 +551,10 @@ print(get_terms("홍길동")[0])
                 archiveSec.classList.add('hidden');
                 createBtn.className = 'flex-1 sm:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-blue-600 text-white font-medium text-sm';
                 archiveBtn.className = 'flex-1 sm:flex-none flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg bg-slate-800 text-slate-300 font-medium text-sm';
+                setTimeout(() => {
+                    resizeCanvas(ownerCanvas);
+                    resizeCanvas(managerCanvas);
+                }, 50);
             } else {
                 createSec.classList.add('hidden');
                 archiveSec.classList.remove('hidden');
@@ -856,7 +822,7 @@ print(get_terms("홍길동")[0])
                         </div>
                     </div>
 
-                    <!-- 4. 원본 약관 및 준수사항 -->
+                    <!-- 4. 약관 및 준수사항 -->
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5 text-xs text-slate-600 leading-relaxed">
                         <h4 class="font-bold text-slate-900 border-b border-slate-200 pb-1 mb-1">4. 약관 및 준수사항</h4>
                         <p>1. <strong>${siteOwner}</strong>(이하 "대표자")은(는) 상기 SITE 내에 설치 된 GS시스템의 A/S를 ㈜지앤서비스(이하 "회사")에 요청하였고, A/S 진행에 필요한 기간 동안 회사로부터 상기 부품을 대여 받았음을 확인합니다.</p>
@@ -910,5 +876,3 @@ print(get_terms("홍길동")[0])
     </script>
 </body>
 </html>
-
-```
