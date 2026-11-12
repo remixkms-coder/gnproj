@@ -18,10 +18,54 @@
         body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; }
         .canvas-wrapper { position: relative; width: 100%; height: 160px; }
         canvas { width: 100%; height: 100%; border: 1px dashed #cbd5e1; border-radius: 0.5rem; background-color: #fff; touch-action: none; cursor: crosshair; }
+
+        /* A4 인쇄 전용 최적화 스타일 */
+        @page {
+            size: A4 portrait;
+            margin: 12mm;
+        }
         @media print {
-            .no-print { display: none !important; }
-            .print-only { display: block !important; }
-            body { background-color: #fff; }
+            body * {
+                visibility: hidden;
+            }
+            body {
+                background-color: #fff !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            /* 모달이 열려있을 때는 모달 내부 문서만 출력 */
+            body.printing-modal #modal-content,
+            body.printing-modal #modal-content * {
+                visibility: visible;
+            }
+            body.printing-modal #modal-content {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 100%;
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            /* 일반 작성 화면에서 인쇄할 때 */
+            body:not(.printing-modal) #pdf-render-area,
+            body:not(.printing-modal) #pdf-render-area * {
+                visibility: visible;
+            }
+            body:not(.printing-modal) #pdf-render-area {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 100%;
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .no-print {
+                display: none !important;
+            }
         }
     </style>
 </head>
@@ -271,17 +315,20 @@
     </main>
 
     <!-- 문서 열람 팝업 모달 -->
-    <div id="view-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 hidden">
-        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
-            <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50 no-print">
+    <div id="view-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-6 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[94vh] flex flex-col overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50 no-print">
                 <span class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
                     <i data-lucide="file-check" class="w-4 h-4 text-emerald-600"></i> 전자서명 확인서 상세 열람
                 </span>
-                <div class="flex items-center space-x-2">
-                    <button id="modal-delete-btn" onclick="" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold flex items-center space-x-1 border border-red-200">
+                <div class="flex items-center space-x-1.5 sm:space-x-2">
+                    <button id="modal-delete-btn" onclick="" class="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold flex items-center space-x-1 border border-red-200">
                         <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> <span>삭제</span>
                     </button>
-                    <button onclick="downloadModalPDF()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center space-x-1">
+                    <button onclick="printModalA4()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold flex items-center space-x-1">
+                        <i data-lucide="printer" class="w-3.5 h-3.5"></i> <span>인쇄 (A4)</span>
+                    </button>
+                    <button onclick="downloadModalPDF()" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center space-x-1">
                         <i data-lucide="download" class="w-3.5 h-3.5"></i> <span>PDF 저장</span>
                     </button>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 p-1">
@@ -289,8 +336,9 @@
                     </button>
                 </div>
             </div>
-            <div id="modal-content-wrapper" class="p-4 sm:p-8 overflow-y-auto">
-                <div id="modal-content" class="bg-white p-6 rounded-xl border border-slate-200 space-y-6 text-xs sm:text-sm">
+            <div id="modal-content-wrapper" class="p-3 sm:p-6 overflow-y-auto bg-slate-100/50">
+                <!-- A4 용지 규격 비율 컨테이너 -->
+                <div id="modal-content" class="bg-white mx-auto p-6 sm:p-8 rounded-xl border border-slate-200 shadow-sm space-y-5 text-xs sm:text-sm" style="max-width: 794px;">
                     <!-- 전체 양식 데이터 출력 -->
                 </div>
             </div>
@@ -299,6 +347,7 @@
 
     <script>
         let currentDocId = '';
+        let currentModalDocId = '';
         let loadedDocsCache = [];
         let ownerCanvas, managerCanvas;
         let isDrawingOwner = false, isDrawingManager = false;
@@ -645,11 +694,11 @@
             const element = document.getElementById('pdf-render-area');
             if (typeof html2pdf !== 'undefined') {
                 const opt = {
-                    margin: 0.3,
+                    margin: [10, 10, 10, 10],
                     filename: `${currentDocId}_대여물품확인서.pdf`,
                     image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2 },
-                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+                    html2canvas: { scale: 2, useCORS: true, logging: false },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
                 };
                 html2pdf().set(opt).from(element).save();
             } else {
@@ -683,6 +732,15 @@
             const badge = document.getElementById('archive-count-badge');
             if (badge) badge.innerText = docs.length;
 
+            const searchVal = (document.getElementById('search-input')?.value || '').toLowerCase();
+            if (searchVal) {
+                docs = docs.filter(d => {
+                    const sName = (d.site_name || '').toLowerCase();
+                    const mName = (d.center_manager || '').toLowerCase();
+                    return sName.includes(searchVal) || mName.includes(searchVal);
+                });
+            }
+
             if (docs.length === 0) {
                 listContainer.innerHTML = `<div class="p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200">보관된 문서가 없습니다.</div>`;
                 return;
@@ -702,7 +760,7 @@
                         <p class="text-xs text-slate-500 mt-1">담당자: ${managerName} | 작성일: ${doc.timestamp ? new Date(doc.timestamp).toLocaleDateString() : '최근'}</p>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button onclick="viewDocDetail('${targetId}')" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold rounded-lg">열람</button>
+                        <button onclick="viewDocDetail('${targetId}')" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold rounded-lg">열람 / 출력</button>
                         <button onclick="deleteDocTarget('${targetId}')" class="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold border border-red-200" title="문서 삭제">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
@@ -746,6 +804,7 @@
             }
 
             const targetId = doc.id || doc.docId;
+            currentModalDocId = targetId;
             document.getElementById('modal-delete-btn').setAttribute('onclick', `deleteDocTarget('${targetId}')`);
 
             const siteName = doc.site_name || (doc.site && doc.site.name) || '-';
@@ -759,15 +818,19 @@
             const managerSign = doc.managerSign || (doc.signatures && doc.signatures.company) || '';
             const items = doc.items || [];
 
+            const dateStr = doc.timestamp 
+                ? `${new Date(doc.timestamp).getFullYear()}년 ${new Date(doc.timestamp).getMonth() + 1}월 ${new Date(doc.timestamp).getDate()}일`
+                : '2026년 --월 --일';
+
             let itemsTableHtml = '';
             if (items.length > 0) {
                 itemsTableHtml = items.map((item, idx) => `
                     <tr class="border-b border-slate-200">
                         <td class="p-2 text-center text-slate-500">${idx + 1}</td>
-                        <td class="p-2 font-mono">${item.code || '-'}</td>
+                        <td class="p-2 font-mono text-xs">${item.code || '-'}</td>
                         <td class="p-2 font-semibold text-slate-900">${item.name || '-'}</td>
                         <td class="p-2 text-center">${item.qty || 1}</td>
-                        <td class="p-2 text-center"><span class="px-2 py-0.5 rounded text-xs ${item.type === '무상' ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-800'}">${item.type || '무상'}</span></td>
+                        <td class="p-2 text-center"><span class="px-1.5 py-0.5 rounded text-xs ${item.type === '무상' ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-800'}">${item.type || '무상'}</span></td>
                         <td class="p-2 text-slate-600">${item.note || '-'}</td>
                     </tr>
                 `).join('');
@@ -777,41 +840,41 @@
 
             const modalContent = document.getElementById('modal-content');
             modalContent.innerHTML = `
-                <div class="space-y-6">
-                    <div class="text-center border-b border-slate-200 pb-4">
-                        <h2 class="text-2xl font-black text-slate-900 tracking-tight">대 여 물 품 확 인 서</h2>
+                <div class="space-y-4">
+                    <div class="text-center border-b-2 border-slate-800 pb-3">
+                        <h2 class="text-2xl font-black text-slate-900 tracking-widest">대 여 물 품 확 인 서</h2>
                         <p class="text-xs text-slate-500 mt-1">문서번호: <strong class="font-mono text-slate-700">${targetId}</strong></p>
                     </div>
 
                     <!-- 1 & 2. 정보 -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
-                            <h4 class="font-bold text-slate-900 text-xs border-b border-slate-200 pb-1 mb-2">1. SITE 정보 (대여처)</h4>
-                            <p><span class="text-slate-500">상호:</span> <strong>${siteName}</strong></p>
-                            <p><span class="text-slate-500">주소:</span> ${siteAddress}</p>
-                            <p><span class="text-slate-500">전화:</span> ${sitePhone}</p>
-                            <p><span class="text-slate-500">대표자:</span> <strong>${siteOwner}</strong></p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-300 space-y-1 text-xs">
+                            <h4 class="font-bold text-slate-900 border-b border-slate-300 pb-1 mb-1.5">1. SITE 정보 (대여처)</h4>
+                            <p><span class="text-slate-500 inline-block w-12">상호:</span> <strong>${siteName}</strong></p>
+                            <p><span class="text-slate-500 inline-block w-12">주소:</span> ${siteAddress}</p>
+                            <p><span class="text-slate-500 inline-block w-12">전화:</span> ${sitePhone}</p>
+                            <p><span class="text-slate-500 inline-block w-12">대표자:</span> <strong>${siteOwner}</strong></p>
                         </div>
-                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
-                            <h4 class="font-bold text-slate-900 text-xs border-b border-slate-200 pb-1 mb-2">2. 관리센터 정보 (대여 관리)</h4>
-                            <p><span class="text-slate-500">센터명:</span> <strong>${centerName}</strong></p>
-                            <p><span class="text-slate-500">담당자:</span> <strong>${centerManager}</strong></p>
-                            <p><span class="text-slate-500">전화:</span> ${centerPhone}</p>
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-300 space-y-1 text-xs">
+                            <h4 class="font-bold text-slate-900 border-b border-slate-300 pb-1 mb-1.5">2. 관리센터 정보 (대여 관리)</h4>
+                            <p><span class="text-slate-500 inline-block w-14">센터명:</span> <strong>${centerName}</strong></p>
+                            <p><span class="text-slate-500 inline-block w-14">담당자:</span> <strong>${centerManager}</strong></p>
+                            <p><span class="text-slate-500 inline-block w-14">전화:</span> ${centerPhone}</p>
                         </div>
                     </div>
 
                     <!-- 3. 대여 물품 목록 -->
-                    <div class="space-y-2">
+                    <div class="space-y-1.5">
                         <h4 class="font-bold text-slate-900 text-xs">3. 대여 물품 목록</h4>
-                        <div class="overflow-x-auto rounded-lg border border-slate-200">
-                            <table class="w-full text-xs text-left">
-                                <thead class="bg-slate-100 text-slate-700 border-b border-slate-200 font-semibold">
+                        <div class="rounded-lg border border-slate-300 overflow-hidden">
+                            <table class="w-full text-xs text-left border-collapse">
+                                <thead class="bg-slate-100 text-slate-800 border-b border-slate-300 font-bold">
                                     <tr>
-                                        <th class="p-2 text-center w-10">NO</th>
-                                        <th class="p-2 w-28">품번</th>
-                                        <th class="p-2">품명</th>
-                                        <th class="p-2 text-center w-16">수량</th>
-                                        <th class="p-2 text-center w-20">구분</th>
+                                        <th class="p-2 text-center w-9 border-r border-slate-200">NO</th>
+                                        <th class="p-2 w-28 border-r border-slate-200">품번</th>
+                                        <th class="p-2 border-r border-slate-200">품명</th>
+                                        <th class="p-2 text-center w-12 border-r border-slate-200">수량</th>
+                                        <th class="p-2 text-center w-16 border-r border-slate-200">구분</th>
                                         <th class="p-2">비고</th>
                                     </tr>
                                 </thead>
@@ -823,26 +886,30 @@
                     </div>
 
                     <!-- 4. 약관 및 준수사항 -->
-                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5 text-xs text-slate-600 leading-relaxed">
-                        <h4 class="font-bold text-slate-900 border-b border-slate-200 pb-1 mb-1">4. 약관 및 준수사항</h4>
+                    <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-300 space-y-1.5 text-xs text-slate-700 leading-relaxed">
+                        <h4 class="font-bold text-slate-900 border-b border-slate-300 pb-1 mb-1">4. 약관 및 준수사항</h4>
                         <p>1. <strong>${siteOwner}</strong>(이하 "대표자")은(는) 상기 SITE 내에 설치 된 GS시스템의 A/S를 ㈜지앤서비스(이하 "회사")에 요청하였고, A/S 진행에 필요한 기간 동안 회사로부터 상기 부품을 대여 받았음을 확인합니다.</p>
                         <p>2. 대표자는 A/S가 완료되거나, 상기 부품을 대여한 후 A/S 요청을 철회하실 경우에는 회사가 상기 SITE의 풀입 및 GS시스템에서 상기 부품을 회수 할 수 있도록 적극 협조하여야 합니다.</p>
                         <p>3. 대표자는 상기 부품을 선량한 관리자의 주의 의무로써 관리하여야 합니다. 대표자는 상기 부품을 손,망실하거나, 제3자에게양도 할 수 없으며, 회사의 요청 시 상기 부품읠 회수가 지연되지 않도록 하여야 합니다. 이를 위반한 대표자(종업원포함)는 회사의 손해를 배상하여야 합니다.</p>
+                        <p class="text-right font-semibold text-blue-700 pt-1">☑ 위 약관 및 준수사항 내용에 고객 동의 완료됨</p>
                     </div>
 
                     <!-- 5. 전자 서명 -->
-                    <div class="border-t border-slate-200 pt-4 space-y-3">
-                        <h4 class="font-bold text-slate-900 text-xs">5. 전자 서명 확인</h4>
+                    <div class="pt-2 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <h4 class="font-bold text-slate-900 text-xs">5. 전자 서명 확인</h4>
+                            <span class="text-xs font-semibold text-slate-700">작성일자: ${dateStr}</span>
+                        </div>
                         <div class="grid grid-cols-2 gap-4">
-                            <div class="border border-slate-200 rounded-xl p-3 text-center bg-white space-y-2">
-                                <span class="text-xs font-semibold text-slate-600 block border-b pb-1">대표자 서명 (${siteOwner})</span>
-                                <div class="h-24 flex items-center justify-center p-1 bg-slate-50 rounded">
+                            <div class="border border-slate-300 rounded-lg p-2.5 text-center bg-white space-y-1.5">
+                                <span class="text-xs font-bold text-slate-700 block border-b border-slate-200 pb-1">스크린골프 대표자: ${siteOwner} (인)</span>
+                                <div class="h-20 flex items-center justify-center p-1 bg-slate-50/70 rounded">
                                     ${ownerSign ? `<img src="${ownerSign}" class="max-h-full max-w-full object-contain" alt="대표자 서명">` : '<span class="text-slate-400">서명 없음</span>'}
                                 </div>
                             </div>
-                            <div class="border border-slate-200 rounded-xl p-3 text-center bg-white space-y-2">
-                                <span class="text-xs font-semibold text-slate-600 block border-b pb-1">담당자 서명 (${centerManager})</span>
-                                <div class="h-24 flex items-center justify-center p-1 bg-slate-50 rounded">
+                            <div class="border border-slate-300 rounded-lg p-2.5 text-center bg-white space-y-1.5">
+                                <span class="text-xs font-bold text-slate-700 block border-b border-slate-200 pb-1">㈜지앤서비스 담당자: ${centerManager} (인)</span>
+                                <div class="h-20 flex items-center justify-center p-1 bg-slate-50/70 rounded">
                                     ${managerSign ? `<img src="${managerSign}" class="max-h-full max-w-full object-contain" alt="담당자 서명">` : '<span class="text-slate-400">서명 없음</span>'}
                                 </div>
                             </div>
@@ -856,21 +923,30 @@
 
         function closeModal() {
             document.getElementById('view-modal').classList.add('hidden');
+            document.body.classList.remove('printing-modal');
+        }
+
+        function printModalA4() {
+            document.body.classList.add('printing-modal');
+            window.print();
+            setTimeout(() => {
+                document.body.classList.remove('printing-modal');
+            }, 500);
         }
 
         function downloadModalPDF() {
             const element = document.getElementById('modal-content');
             if (typeof html2pdf !== 'undefined') {
                 const opt = {
-                    margin: 0.3,
-                    filename: `대여물품확인서_상세.pdf`,
+                    margin: [10, 10, 10, 10], // 상하좌우 10mm 여백
+                    filename: `${currentModalDocId || '대여물품확인서'}_A4.pdf`,
                     image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2 },
-                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+                    html2canvas: { scale: 2, useCORS: true, windowWidth: 794 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
                 };
                 html2pdf().set(opt).from(element).save();
             } else {
-                window.print();
+                printModalA4();
             }
         }
     </script>
